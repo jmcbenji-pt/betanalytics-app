@@ -1,0 +1,1683 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BetAnalytics Pro</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg-primary: #0d0f14;
+    --bg-secondary: #13161e;
+    --bg-card: #1a1e2a;
+    --bg-card-hover: #1f2435;
+    --accent-blue: #3b82f6;
+    --accent-green: #10b981;
+    --accent-amber: #f59e0b;
+    --accent-red: #ef4444;
+    --accent-purple: #8b5cf6;
+    --accent-cyan: #06b6d4;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #475569;
+    --border: #1e2535;
+    --border-light: #2d3748;
+    --positive: #10b981;
+    --negative: #ef4444;
+    --warning: #f59e0b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; }
+
+  /* TOP NAV */
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 58px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+  .logo { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+  .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .banca-info { display: flex; gap: 20px; align-items: center; }
+  .banca-item { text-align: right; }
+  .banca-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; }
+  .banca-val { font-size: 15px; font-weight: 600; }
+  .banca-val.green { color: var(--accent-green); }
+  .banca-val.amber { color: var(--accent-amber); }
+
+  /* TABS */
+  .tabs { display: flex; gap: 4px; padding: 0 24px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .tab { padding: 12px 18px; font-size: 13px; font-weight: 500; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.15s; }
+  .tab:hover { color: var(--text-primary); }
+  .tab.active { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
+  .tab-badge { display: inline-block; background: var(--accent-blue); color: #fff; font-size: 10px; border-radius: 10px; padding: 1px 6px; margin-left: 6px; }
+  .tab-badge.green { background: var(--accent-green); }
+
+  /* MAIN */
+  .main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* CARDS */
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .card-title { font-size: 14px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 16px; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+
+  /* BUTTONS */
+  .btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; }
+  .btn-primary { background: var(--accent-blue); color: #fff; }
+  .btn-primary:hover { background: #2563eb; }
+  .btn-success { background: var(--accent-green); color: #fff; }
+  .btn-success:hover { background: #059669; }
+  .btn-amber { background: var(--accent-amber); color: #000; }
+  .btn-amber:hover { background: #d97706; }
+  .btn-danger { background: var(--accent-red); color: #fff; }
+  .btn-danger:hover { background: #dc2626; }
+  .btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-light); }
+  .btn-ghost:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+  .btn-purple { background: var(--accent-purple); color: #fff; }
+  .btn-purple:hover { background: #7c3aed; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* GRIDS */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+
+  /* STAT CARDS */
+  .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 6px; }
+  .stat-val { font-size: 24px; font-weight: 700; }
+  .stat-val.blue { color: var(--accent-blue); }
+  .stat-val.green { color: var(--accent-green); }
+  .stat-val.amber { color: var(--accent-amber); }
+  .stat-val.purple { color: var(--accent-purple); }
+  .stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+  /* TABLE */
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tbl th { padding: 10px 12px; text-align: left; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+  .tbl td { padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .tbl tr:last-child td { border-bottom: none; }
+  .tbl tr:hover td { background: var(--bg-card-hover); }
+  .tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* BADGES */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .badge-blue { background: rgba(59,130,246,0.15); color: var(--accent-blue); }
+  .badge-green { background: rgba(16,185,129,0.15); color: var(--accent-green); }
+  .badge-amber { background: rgba(245,158,11,0.15); color: var(--accent-amber); }
+  .badge-red { background: rgba(239,68,68,0.15); color: var(--accent-red); }
+  .badge-purple { background: rgba(139,92,246,0.15); color: var(--accent-purple); }
+  .badge-gray { background: rgba(148,163,184,0.1); color: var(--text-secondary); }
+
+  /* UPLOAD ZONE */
+  .upload-zone { border: 2px dashed var(--border-light); border-radius: 12px; padding: 48px; text-align: center; cursor: pointer; transition: all 0.2s; }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent-blue); background: rgba(59,130,246,0.05); }
+  .upload-icon { font-size: 40px; margin-bottom: 12px; }
+  .upload-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .upload-sub { font-size: 13px; color: var(--text-secondary); }
+
+  /* GAME ROW */
+  .game-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; }
+  .game-teams { font-size: 14px; font-weight: 600; }
+  .game-league { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .game-odds { display: flex; gap: 6px; }
+  .odd-btn { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-light); background: var(--bg-secondary); font-size: 13px; font-weight: 600; color: var(--text-primary); cursor: pointer; transition: all 0.15s; min-width: 54px; text-align: center; }
+  .odd-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+  .odd-label { font-size: 10px; color: var(--text-muted); text-align: center; margin-top: 2px; }
+  .odd-group { text-align: center; }
+
+  /* ANALYSIS CARD */
+  .analysis-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+  .analysis-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .analysis-body { padding: 18px; }
+  .prob-bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-top: 4px; }
+  .prob-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+  .fill-blue { background: var(--accent-blue); }
+  .fill-gray { background: var(--text-muted); }
+  .fill-green { background: var(--accent-green); }
+  .prob-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .prob-label { font-size: 12px; color: var(--text-secondary); width: 60px; }
+  .prob-val { font-size: 12px; font-weight: 600; width: 40px; text-align: right; }
+  .ev-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+  .ev-pos { background: rgba(16,185,129,0.15); color: var(--accent-green); }
+  .ev-neg { background: rgba(239,68,68,0.1); color: #94a3b8; }
+
+  /* REC CARD */
+  .rec-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 12px; position: relative; overflow: hidden; }
+  .rec-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; }
+  .rec-card.high::before { background: var(--accent-green); }
+  .rec-card.medium::before { background: var(--accent-amber); }
+  .rec-card.low::before { background: var(--accent-blue); }
+  .rec-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+  .rec-market { font-size: 13px; color: var(--accent-cyan); font-weight: 600; margin-bottom: 4px; }
+  .rec-bet { font-size: 18px; font-weight: 700; }
+  .stake-big { font-size: 28px; font-weight: 800; color: var(--accent-green); }
+  .stake-label { font-size: 11px; color: var(--text-muted); }
+
+  /* HISTORY */
+  .hist-row { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; margin-bottom: 8px; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 120px; align-items: center; gap: 12px; }
+  .result-input { background: var(--bg-secondary); border: 1px solid var(--border-light); color: var(--text-primary); border-radius: 6px; padding: 6px 10px; font-size: 13px; width: 100%; text-align: center; }
+  .result-input:focus { outline: none; border-color: var(--accent-blue); }
+
+  /* PROGRESS */
+  .progress-track { background: var(--border); border-radius: 4px; height: 6px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple)); transition: width 0.5s; }
+
+  /* LOADER */
+  .loader { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ALERTS */
+  .alert { padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
+  .alert-info { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); color: #93c5fd; }
+  .alert-success { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); color: #6ee7b7; }
+  .alert-warning { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2); color: #fde68a; }
+  .alert-danger { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); color: #fca5a5; }
+
+  /* DASHBOARD SPARKLINE */
+  .sparkline-wrap { display: flex; align-items: flex-end; gap: 3px; height: 32px; }
+  .spark-bar { flex: 1; border-radius: 2px; min-width: 6px; transition: height 0.3s; }
+
+  /* EMPTY STATE */
+  .empty-state { text-align: center; padding: 60px 20px; }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.3; }
+  .empty-title { font-size: 16px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+  .empty-sub { font-size: 13px; color: var(--text-muted); }
+
+  /* DIVIDER */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+  /* TOGGLE */
+  .toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .toggle-info { font-size: 13px; }
+  .toggle-label { font-weight: 500; }
+  .toggle-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .toggle { position: relative; width: 36px; height: 20px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--border-light); border-radius: 20px; transition: 0.3s; }
+  .toggle-slider:before { position: absolute; content: ''; height: 14px; width: 14px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s; }
+  .toggle input:checked + .toggle-slider { background: var(--accent-blue); }
+  .toggle input:checked + .toggle-slider:before { transform: translateX(16px); }
+
+  input[type="number"], input[type="text"], select { background: var(--bg-secondary); border: 1px solid var(--border-light); color: var(--text-primary); border-radius: 6px; padding: 8px 12px; font-size: 13px; }
+  input[type="number"]:focus, input[type="text"]:focus, select:focus { outline: none; border-color: var(--accent-blue); }
+  select option { background: var(--bg-secondary); }
+
+  .flex { display: flex; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+  .gap-8 { gap: 8px; }
+  .gap-12 { gap: 12px; }
+  .gap-16 { gap: 16px; }
+  .mb-4 { margin-bottom: 4px; }
+  .mb-8 { margin-bottom: 8px; }
+  .mb-12 { margin-bottom: 12px; }
+  .mb-16 { margin-bottom: 16px; }
+  .mb-24 { margin-bottom: 24px; }
+  .text-sm { font-size: 13px; }
+  .text-xs { font-size: 11px; }
+  .text-muted { color: var(--text-secondary); }
+  .text-dim { color: var(--text-muted); }
+  .fw-600 { font-weight: 600; }
+  .fw-700 { font-weight: 700; }
+
+  @media (max-width: 768px) {
+    .grid-4, .grid-5 { grid-template-columns: repeat(2,1fr); }
+    .grid-3 { grid-template-columns: 1fr; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .hist-row { grid-template-columns: 1fr 1fr; }
+    .banca-info { gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">⚽</div>
+    BetAnalytics Pro
+  </div>
+  <div class="banca-info">
+    <div class="banca-item">
+      <div class="banca-label">Banca</div>
+      <div class="banca-val green" id="banca-display">€2.000</div>
+    </div>
+    <div class="banca-item">
+      <div class="banca-label">Diário restante</div>
+      <div class="banca-val amber" id="daily-remaining">€100</div>
+    </div>
+    <div class="banca-item">
+      <div class="banca-label">P&L Mensal</div>
+      <div class="banca-val" id="monthly-pl" style="color:var(--text-secondary)">€0</div>
+    </div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('dashboard')">📊 Dashboard</div>
+  <div class="tab" onclick="switchTab('jogos')">📥 Jogos <span class="tab-badge" id="badge-jogos" style="display:none">0</span></div>
+  <div class="tab" onclick="switchTab('analise')">🔬 Análise <span class="tab-badge" id="badge-analise" style="display:none">0</span></div>
+  <div class="tab" onclick="switchTab('recomendacoes')">⭐ Recomendações <span class="tab-badge green" id="badge-recs" style="display:none">0</span></div>
+  <div class="tab" onclick="switchTab('historico')">📋 Histórico</div>
+  <div class="tab" onclick="switchTab('config')">⚙️ Configurações</div>
+</div>
+
+<div class="main">
+
+<!-- ═══════════════════════════════ DASHBOARD ═══════════════════════════════ -->
+<div class="section active" id="sec-dashboard">
+  <div class="grid-5 mb-24">
+    <div class="stat-card">
+      <div class="stat-label">Banca Atual</div>
+      <div class="stat-val blue" id="dash-banca">€2.000</div>
+      <div class="stat-sub">Início: €2.000</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Apostas Hoje</div>
+      <div class="stat-val amber" id="dash-today">0</div>
+      <div class="stat-sub" id="dash-today-spend">Gasto: €0 / €100</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Retorno Mensal</div>
+      <div class="stat-val green" id="dash-monthly">€0</div>
+      <div class="stat-sub">Meta: €500</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Taxa de Acerto</div>
+      <div class="stat-val purple" id="dash-hit-rate">—</div>
+      <div class="stat-sub" id="dash-record">0W / 0L</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">ROI Total</div>
+      <div class="stat-val" id="dash-roi" style="color:var(--text-secondary)">—</div>
+      <div class="stat-sub" id="dash-roi-sub">Todas as apostas</div>
+    </div>
+  </div>
+
+  <div class="grid-2 mb-16">
+    <div class="card">
+      <div class="card-title">Progresso Meta Mensal</div>
+      <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+        <span class="text-sm text-muted">€<span id="prog-val">0</span> de €500</span>
+        <span class="text-sm fw-600 text-muted"><span id="prog-pct">0</span>%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="prog-bar" style="width:0%"></div>
+      </div>
+      <div class="text-xs text-dim" style="margin-top:8px" id="prog-days-left">Meta escalável após atingir €500</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Evolução da Banca</div>
+      <div class="sparkline-wrap" id="sparkline">
+        <!-- gerado por JS -->
+      </div>
+      <div class="text-xs text-dim" style="margin-top:8px">Últimas apostas registadas</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Últimas Apostas</div>
+    <div id="dash-recent">
+      <div class="empty-state">
+        <div class="empty-icon">📭</div>
+        <div class="empty-title">Sem histórico ainda</div>
+        <div class="empty-sub">As apostas confirmadas aparecerão aqui</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ JOGOS ═══════════════════════════════ -->
+<div class="section" id="sec-jogos">
+  <div class="card mb-16">
+    <div class="card-header">
+      <div>
+        <div class="card-title" style="margin-bottom:4px">Importar Jogos</div>
+        <div class="text-sm text-muted">Faz upload do teu Excel com os jogos e odds do dia</div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-ghost" onclick="downloadTemplate()">⬇ Template Excel</button>
+        <input type="file" id="excel-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleExcel(event)">
+        <button class="btn btn-primary" onclick="document.getElementById('excel-input').click()">⬆ Importar Excel</button>
+      </div>
+    </div>
+    <div class="upload-zone" id="drop-zone" onclick="document.getElementById('excel-input').click()">
+      <div class="upload-icon">📊</div>
+      <div class="upload-title">Arrastar Excel aqui ou clicar para selecionar</div>
+      <div class="upload-sub">Colunas: Equipa Casa · Equipa Fora · Liga · Data · Odd 1/X/2 · Over 2,5 · Under 2,5 · Over 3,5 · BTTS Sim/Não · HT Casa/Empate/Fora · HT Over 0,5 · HT Over 1,5 · BTTS HT Sim</div>
+    </div>
+  </div>
+
+  <div id="jogos-container" style="display:none">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title" style="margin-bottom:0">Jogos Importados (<span id="jogos-count">0</span>)</div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-danger btn-ghost" onclick="clearJogos()">🗑 Limpar</button>
+          <button class="btn btn-success" onclick="confirmJogos()">✓ Confirmar e Analisar</button>
+        </div>
+      </div>
+      <div id="jogos-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ ANÁLISE ═══════════════════════════════ -->
+<div class="section" id="sec-analise">
+  <div id="analise-empty" class="card">
+    <div class="empty-state">
+      <div class="empty-icon">🔬</div>
+      <div class="empty-title">Sem jogos para analisar</div>
+      <div class="empty-sub">Importa e confirma jogos no separador Jogos primeiro</div>
+    </div>
+  </div>
+  <div id="analise-main" style="display:none">
+    <div class="card mb-16">
+      <div class="card-header">
+        <div>
+          <div class="card-title" style="margin-bottom:4px">Motor de Análise — Dixon-Coles + xG</div>
+          <div class="text-sm text-muted"><span id="analise-count">0</span> jogos prontos para análise</div>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-ghost" id="btn-fetch-data" onclick="fetchAllData()">🌐 Buscar xG + Notícias</button>
+          <button class="btn btn-amber" id="btn-analyze-all" onclick="analyzeAll()" disabled>⚡ Analisar Todos</button>
+          <button class="btn btn-danger btn-ghost" onclick="clearAnalise()">🗑 Limpar</button>
+          <button class="btn btn-success" id="btn-confirm-bets" onclick="confirmBets()" disabled>✓ Confirmar Apostas</button>
+        </div>
+      </div>
+      <div id="fetch-status"></div>
+    </div>
+    <div id="analise-list"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ RECOMENDAÇÕES ═══════════════════════════════ -->
+<div class="section" id="sec-recomendacoes">
+  <div id="recs-empty" class="card">
+    <div class="empty-state">
+      <div class="empty-icon">⭐</div>
+      <div class="empty-title">Sem recomendações ainda</div>
+      <div class="empty-sub">Corre a análise completa para ver as apostas com +EV</div>
+    </div>
+  </div>
+  <div id="recs-main" style="display:none">
+    <div class="card mb-16">
+      <div class="card-header">
+        <div>
+          <div class="card-title" style="margin-bottom:4px">Apostas Recomendadas</div>
+          <div class="text-sm text-muted">Apenas 1 aposta por jogo · Só apostas com +EV</div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <div style="text-align:right;">
+            <div class="text-xs text-dim">Stake total hoje</div>
+            <div class="fw-700" style="color:var(--accent-amber); font-size:16px;">€<span id="total-stake">0</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="recs-list"></div>
+    <div id="no-value-alert" style="display:none" class="alert alert-warning">
+      ⚠️ Hoje não há apostas viáveis com valor esperado positivo suficiente. Recomendamos não apostar.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ HISTÓRICO ═══════════════════════════════ -->
+<div class="section" id="sec-historico">
+  <div class="card mb-16">
+    <div class="card-header">
+      <div class="card-title" style="margin-bottom:0">Histórico de Apostas</div>
+      <button class="btn btn-ghost" onclick="exportHistorico()">⬇ Exportar CSV</button>
+    </div>
+  </div>
+  <div id="historico-empty" class="card">
+    <div class="empty-state">
+      <div class="empty-icon">📋</div>
+      <div class="empty-title">Sem apostas no histórico</div>
+      <div class="empty-sub">As apostas confirmadas aparecem aqui para inserires os resultados</div>
+    </div>
+  </div>
+  <div id="historico-main" style="display:none">
+    <div style="display:grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 120px; gap:12px; padding: 0 18px 8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">
+      <div>Jogo & Aposta</div>
+      <div>Res. Final</div>
+      <div>Res. Interv.</div>
+      <div>xG Final</div>
+      <div>xG Interv.</div>
+      <div>Estado</div>
+    </div>
+    <div id="historico-list"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ CONFIGURAÇÕES ═══════════════════════════════ -->
+<div class="section" id="sec-config">
+  <div class="grid-2">
+    <div>
+      <div class="card mb-16">
+        <div class="card-title">Gestão de Banca</div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-label">Banca Inicial (€)</div>
+            <div class="toggle-desc">Valor total disponível para apostas</div>
+          </div>
+          <input type="number" id="cfg-banca" value="2000" style="width:100px" onchange="saveConfig()">
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-label">Limite Diário (€)</div>
+            <div class="toggle-desc">Máximo a arriscar por dia</div>
+          </div>
+          <input type="number" id="cfg-daily" value="100" style="width:100px" onchange="saveConfig()">
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-label">Meta Mensal (€)</div>
+            <div class="toggle-desc">Objetivo de retorno mensal</div>
+          </div>
+          <input type="number" id="cfg-monthly-goal" value="500" style="width:100px" onchange="saveConfig()">
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-label">EV Mínimo (%)</div>
+            <div class="toggle-desc">Valor esperado mínimo para recomendar</div>
+          </div>
+          <input type="number" id="cfg-min-ev" value="3" style="width:100px" onchange="saveConfig()">
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Estratégia de Stakes</div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-label">Método de Staking</div>
+            <div class="toggle-desc">Como calcular o valor de cada aposta</div>
+          </div>
+          <select id="cfg-staking" onchange="saveConfig()" style="width:130px">
+            <option value="kelly">Kelly Fraccionado</option>
+            <option value="flat">Flat (fixo)</option>
+            <option value="proportional">Proporcional ao EV</option>
+          </select>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-label">Fracção Kelly (%)</div>
+            <div class="toggle-desc">% do Kelly completo a aplicar (recomendado: 25-33%)</div>
+          </div>
+          <input type="number" id="cfg-kelly-frac" value="25" min="5" max="100" style="width:100px" onchange="saveConfig()">
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-label">Odds mínimas</div>
+            <div class="toggle-desc">Odds abaixo deste valor são ignoradas</div>
+          </div>
+          <input type="number" id="cfg-min-odds" value="1.30" step="0.05" style="width:100px" onchange="saveConfig()">
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-label">Odds máximas</div>
+            <div class="toggle-desc">Odds acima deste valor são ignoradas</div>
+          </div>
+          <input type="number" id="cfg-max-odds" value="5.00" step="0.05" style="width:100px" onchange="saveConfig()">
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card mb-16">
+        <div class="card-title">Mercados Ativos</div>
+        <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">1X2 (Resultado Final)</div></div><label class="toggle"><input type="checkbox" id="mkt-1x2" checked onchange="saveConfig()"><span class="toggle-slider"></span></label></div>
+        <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">1X2 Intervalo (HT)</div></div><label class="toggle"><input type="checkbox" id="mkt-ht" checked onchange="saveConfig()"><span class="toggle-slider"></span></label></div>
+        <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">BTTS (Ambas Marcam)</div></div><label class="toggle"><input type="checkbox" id="mkt-btts" checked onchange="saveConfig()"><span class="toggle-slider"></span></label></div>
+        <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">BTTS 1ª Parte</div></div><label class="toggle"><input type="checkbox" id="mkt-btts-ht" checked onchange="saveConfig()"><span class="toggle-slider"></span></label></div>
+        <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">Over/Under 2.5</div></div><label class="toggle"><input type="checkbox" id="mkt-ou25" checked onchange="saveConfig()"><span class="toggle-slider"></span></label></div>
+        <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">Over/Under 3.5</div></div><label class="toggle"><input type="checkbox" id="mkt-ou35" checked onchange="saveConfig()"><span class="toggle-slider"></span></label></div>
+        <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">Over/Under 0.5 (1ªP)</div></div><label class="toggle"><input type="checkbox" id="mkt-ou05h" checked onchange="saveConfig()"><span class="toggle-slider"></span></label></div>
+        <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">Over/Under 1.5 (1ªP)</div></div><label class="toggle"><input type="checkbox" id="mkt-ou15h" checked onchange="saveConfig()"><span class="toggle-slider"></span></label></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Backend API</div>
+        <div class="alert alert-info mb-12">
+          ℹ️ Para dados reais de xG e notícias, é necessário configurar um backend. Sem backend, o modelo usa estimativas baseadas nas odds.
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-label">URL do Backend</div>
+            <div class="toggle-desc">URL do teu servidor Render.com</div>
+          </div>
+          <input type="text" id="cfg-backend" placeholder="https://betapi.onrender.com" style="width:220px" onchange="saveConfig()">
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-label">football-data.org Key</div>
+            <div class="toggle-desc">Chave API gratuita (tier free)</div>
+          </div>
+          <input type="text" id="cfg-fd-key" placeholder="API Key" style="width:180px" onchange="saveConfig()">
+        </div>
+        <button class="btn btn-ghost" style="margin-top:12px" onclick="testBackend()">🔌 Testar Ligação</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════
+let state = {
+  banca: 2000,
+  dailyLimit: 100,
+  monthlyGoal: 500,
+  minEV: 3,
+  staking: 'kelly',
+  kellyFrac: 0.25,
+  minOdds: 1.30,
+  maxOdds: 5.00,
+  jogos: [],
+  analises: [],
+  recomendacoes: [],
+  historico: [],
+  monthlyPL: 0,
+  dailySpent: 0,
+  totalWins: 0,
+  totalLosses: 0,
+  markets: { '1x2':true, 'ht':true, 'btts':true, 'btts-ht':true, 'ou25':true, 'ou35':true, 'ou05h':true, 'ou15h':true },
+  backendUrl: '',
+  fdKey: '',
+  bancaHistory: [2000]
+};
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem('betanalytics_state');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      state = { ...state, ...parsed };
+    }
+  } catch(e) {}
+}
+
+function saveState() {
+  try { localStorage.setItem('betanalytics_state', JSON.stringify(state)); } catch(e) {}
+}
+
+// ══════════════════════════════════════════════════════════════
+// NAV
+// ══════════════════════════════════════════════════════════════
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('sec-' + id).classList.add('active');
+  const tabs = document.querySelectorAll('.tab');
+  const map = { dashboard:0, jogos:1, analise:2, recomendacoes:3, historico:4, config:5 };
+  tabs[map[id]].classList.add('active');
+  if (id === 'dashboard') refreshDashboard();
+}
+
+// ══════════════════════════════════════════════════════════════
+// EXCEL IMPORT
+// ══════════════════════════════════════════════════════════════
+function handleExcel(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const wb = XLSX.read(e.target.result, { type: 'binary' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    parseExcelData(data);
+  };
+  reader.readAsBinaryString(file);
+}
+
+function excelDateToString(val) {
+  // Convert Excel serial date number to dd/mm/yyyy string
+  if (typeof val === 'number' && val > 40000) {
+    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+    const day = String(d.getUTCDate()).padStart(2,'0');
+    const month = String(d.getUTCMonth()+1).padStart(2,'0');
+    const year = d.getUTCFullYear();
+    return `${day}/${month}/${year}`;
+  }
+  if (val) return String(val);
+  return new Date().toLocaleDateString('pt-PT');
+}
+
+function parseFloat_pt(val) {
+  // Handle both "1.95" and "1,95" (Portuguese decimal separator)
+  if (val === undefined || val === null || val === '') return 0;
+  if (typeof val === 'number') return val;
+  return parseFloat(String(val).replace(',','.')) || 0;
+}
+
+function parseExcelData(rows) {
+  if (rows.length < 2) { alert('Excel sem dados suficientes'); return; }
+  // Normalize headers: lowercase, trim, remove accents for matching
+  const header = rows[0].map(h => String(h||'').toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,''));
+  const jogos = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.every(c => !c && c !== 0)) continue;
+
+    const get = (keys) => {
+      for (const k of keys) {
+        const norm = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        const idx = header.findIndex(h => h === norm || h.includes(norm));
+        if (idx >= 0 && row[idx] !== undefined && row[idx] !== '') return row[idx];
+      }
+      return null;
+    };
+
+    const rawData = get(['data','date','dia']);
+    const jogo = {
+      id: Date.now() + i,
+      // Your exact column names:
+      casa: get(['equipa casa','casa','home','team home','equipa_casa']) || row[0] || '?',
+      fora: get(['equipa fora','fora','away','team away','equipa_fora']) || row[1] || '?',
+      liga: get(['liga','league','competition']) || row[2] || 'Liga',
+      data: excelDateToString(rawData),
+      hora: get(['hora','time','kick off','kickoff']) || '—',
+      odds: {
+        // 1X2
+        h:      parseFloat_pt(get(['odd 1','odds 1','odd1'])),
+        d:      parseFloat_pt(get(['odd x','odds x','oddx'])),
+        a:      parseFloat_pt(get(['odd 2','odds 2','odd2'])),
+        // Over/Under — your template has Over 2,5 / Under 2,5 / Over 3,5 (no Under 3.5)
+        o25:    parseFloat_pt(get(['over 2,5','over 2.5','o2.5','over25'])),
+        u25:    parseFloat_pt(get(['under 2,5','under 2.5','u2.5','under25'])),
+        o35:    parseFloat_pt(get(['over 3,5','over 3.5','o3.5','over35'])),
+        u35:    0, // not in your template
+        // BTTS
+        btts_s: parseFloat_pt(get(['btts sim','btts s','btts_s','ambas marcam sim'])),
+        btts_n: parseFloat_pt(get(['btts nao','btts não','btts n','btts_n','ambas marcam nao'])),
+        // HT 1X2
+        ht_h:   parseFloat_pt(get(['ht casa','ht_casa','ht 1','ht1'])),
+        ht_d:   parseFloat_pt(get(['ht empate','ht_empate','ht x','htx'])),
+        ht_a:   parseFloat_pt(get(['ht fora','ht_fora','ht 2','ht2'])),
+        // HT Over — your template: HT Over 0,5 / HT Over 1,5 / BTTS HT Sim
+        o05h:   parseFloat_pt(get(['ht over 0,5','ht over 0.5','over 0,5 ht','o0.5 ht','o05h'])),
+        u05h:   0,
+        o15h:   parseFloat_pt(get(['ht over 1,5','ht over 1.5','over 1,5 ht','o1.5 ht','o15h'])),
+        u15h:   0,
+        // BTTS HT — your template has "BTTS HT Sim"
+        btts_ht_s: parseFloat_pt(get(['btts ht sim','btts ht s','btts_ht_sim'])),
+      },
+      xgData: null,
+      news: [],
+      analyzed: false,
+      confirmed: false
+    };
+    if (jogo.casa && jogo.fora && jogo.casa !== '?') jogos.push(jogo);
+  }
+
+  if (jogos.length === 0) {
+    alert('Não foi possível reconhecer jogos.\n\nColunas esperadas: Equipa Casa | Equipa Fora | Liga | Data | Odd 1 | Odd X | Odd 2 | Over 2,5 | Under 2,5 | Over 3,5 | BTTS Sim | BTTS Não | HT Casa | HT Empate | HT Fora | HT Over 0,5 | HT Over 1,5 | BTTS HT Sim');
+    return;
+  }
+  state.jogos = jogos;
+  saveState();
+  renderJogos();
+  document.getElementById('badge-jogos').textContent = jogos.length;
+  document.getElementById('badge-jogos').style.display = 'inline-block';
+  updateBadgeAnalise();
+}
+
+function renderJogos() {
+  const c = document.getElementById('jogos-container');
+  const list = document.getElementById('jogos-list');
+  const count = document.getElementById('jogos-count');
+  c.style.display = 'block';
+  document.getElementById('drop-zone').style.display = 'none';
+  count.textContent = state.jogos.length;
+  list.innerHTML = '';
+  state.jogos.forEach((j, idx) => {
+    const div = document.createElement('div');
+    div.className = 'game-row';
+    div.innerHTML = `
+      <div>
+        <div class="game-teams">${j.casa} <span style="color:var(--text-muted)">vs</span> ${j.fora}</div>
+        <div class="game-league">🏆 ${j.liga} &nbsp;·&nbsp; 📅 ${j.data}</div>
+      </div>
+      <div class="game-odds">
+        <div class="odd-group"><div class="odd-btn">${j.odds.h || '—'}</div><div class="odd-label">1</div></div>
+        <div class="odd-group"><div class="odd-btn">${j.odds.d || '—'}</div><div class="odd-label">X</div></div>
+        <div class="odd-group"><div class="odd-btn">${j.odds.a || '—'}</div><div class="odd-label">2</div></div>
+        ${j.odds.o25 ? `<div class="odd-group"><div class="odd-btn">${j.odds.o25}</div><div class="odd-label">O2,5</div></div>` : ''}
+        ${j.odds.u25 ? `<div class="odd-group"><div class="odd-btn">${j.odds.u25}</div><div class="odd-label">U2,5</div></div>` : ''}
+        ${j.odds.btts_s ? `<div class="odd-group"><div class="odd-btn">${j.odds.btts_s}</div><div class="odd-label">BTTS S</div></div>` : ''}
+        ${j.odds.ht_h ? `<div class="odd-group"><div class="odd-btn">${j.odds.ht_h}</div><div class="odd-label">HT 1</div></div>` : ''}
+      </div>
+      <button class="btn btn-danger" style="padding:6px 10px;font-size:12px" onclick="removeJogo(${idx})">✕</button>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function removeJogo(idx) {
+  state.jogos.splice(idx, 1);
+  saveState();
+  renderJogos();
+  updateBadgeJogos();
+}
+
+function clearJogos() {
+  if (!confirm('Limpar todos os jogos?')) return;
+  state.jogos = [];
+  saveState();
+  document.getElementById('jogos-container').style.display = 'none';
+  document.getElementById('drop-zone').style.display = 'block';
+  document.getElementById('excel-input').value = '';
+  updateBadgeJogos();
+}
+
+function confirmJogos() {
+  if (state.jogos.length === 0) return;
+  state.analises = state.jogos.map(j => ({ ...j, analyzed: false }));
+  saveState();
+  showAnaliseMain();
+  switchTab('analise');
+  document.getElementById('badge-analise').textContent = state.analises.length;
+  document.getElementById('badge-analise').style.display = 'inline-block';
+}
+
+function updateBadgeJogos() {
+  const b = document.getElementById('badge-jogos');
+  b.textContent = state.jogos.length;
+  b.style.display = state.jogos.length > 0 ? 'inline-block' : 'none';
+}
+
+function updateBadgeAnalise() {
+  const b = document.getElementById('badge-analise');
+  b.textContent = state.analises.length;
+  b.style.display = state.analises.length > 0 ? 'inline-block' : 'none';
+}
+
+// ══════════════════════════════════════════════════════════════
+// TEMPLATE EXCEL
+// ══════════════════════════════════════════════════════════════
+function downloadTemplate() {
+  const wb = XLSX.utils.book_new();
+  const headers = ['Equipa Casa','Equipa Fora','Liga','Data','Odd 1','Odd X','Odd 2','Over 2,5','Under 2,5','Over 3,5','BTTS Sim','BTTS Não','HT Casa','HT Empate','HT Fora','HT Over 0,5','HT Over 1,5','BTTS HT Sim'];
+  const ex1 = ['Benfica','Porto','portugal 1','15/06/2026',1.85,3.40,4.10,1.78,1.92,2.95,1.82,1.88,2.10,2.95,3.60,1.38,2.62,4.65];
+  const ex2 = ['Barcelona','Real Madrid','espanha 1','15/06/2026',2.20,3.30,3.10,1.88,1.82,3.10,1.75,1.95,2.30,3.10,3.20,1.35,2.70,5.00];
+  const ws = XLSX.utils.aoa_to_sheet([headers, ex1, ex2]);
+  ws['!cols'] = headers.map(h => ({ wch: Math.max(h.length + 2, 12) }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Jogos');
+  XLSX.writeFile(wb, 'template_betanalytics.xlsx');
+}
+
+// ══════════════════════════════════════════════════════════════
+// DIXON-COLES MODEL
+// ══════════════════════════════════════════════════════════════
+function impliedProb(odds) {
+  if (!odds || odds <= 1) return 0;
+  return 1 / odds;
+}
+
+function normalizeProbs(h, d, a) {
+  const sum = h + d + a;
+  if (sum <= 0) return { h: 0.33, d: 0.33, a: 0.34 };
+  return { h: h/sum, d: d/sum, a: a/sum };
+}
+
+function poissonProb(lambda, k) {
+  if (lambda <= 0) return k === 0 ? 1 : 0;
+  let logP = -lambda + k * Math.log(lambda);
+  for (let i = 1; i <= k; i++) logP -= Math.log(i);
+  return Math.exp(logP);
+}
+
+// Dixon-Coles correction (low scoring adjustment)
+function tauCorrection(homeGoals, awayGoals, lambdaH, lambdaA, rho) {
+  if (homeGoals === 0 && awayGoals === 0) return 1 - lambdaH * lambdaA * rho;
+  if (homeGoals === 0 && awayGoals === 1) return 1 + lambdaH * rho;
+  if (homeGoals === 1 && awayGoals === 0) return 1 + lambdaA * rho;
+  if (homeGoals === 1 && awayGoals === 1) return 1 - rho;
+  return 1;
+}
+
+function dixonColesMatrix(lambdaH, lambdaA, rho, maxGoals = 6) {
+  const matrix = [];
+  let total = 0;
+  for (let i = 0; i <= maxGoals; i++) {
+    matrix[i] = [];
+    for (let j = 0; j <= maxGoals; j++) {
+      const p = poissonProb(lambdaH, i) * poissonProb(lambdaA, j) * tauCorrection(i, j, lambdaH, lambdaA, rho);
+      matrix[i][j] = p;
+      total += p;
+    }
+  }
+  // normalize
+  for (let i = 0; i <= maxGoals; i++)
+    for (let j = 0; j <= maxGoals; j++)
+      matrix[i][j] /= total;
+  return matrix;
+}
+
+function calcMarketsFromMatrix(matrix, maxGoals = 6) {
+  let pH = 0, pD = 0, pA = 0;
+  let pBTTS = 0, pNoBTTS = 0;
+  let pO25 = 0, pU25 = 0, pO35 = 0, pU35 = 0;
+  let pHH = 0, pHD = 0, pHA = 0; // HT (estimate from first half)
+  let pO05H = 0, pU05H = 0, pO15H = 0, pU15H = 0;
+
+  for (let i = 0; i <= maxGoals; i++) {
+    for (let j = 0; j <= maxGoals; j++) {
+      const p = matrix[i][j];
+      if (!p) continue;
+      if (i > j) pH += p;
+      else if (i === j) pD += p;
+      else pA += p;
+      if (i > 0 && j > 0) pBTTS += p;
+      else pNoBTTS += p;
+      const total = i + j;
+      if (total > 2.5) pO25 += p; else pU25 += p;
+      if (total > 3.5) pO35 += p; else pU35 += p;
+    }
+  }
+
+  // HT estimate: roughly 40% of full-time goals in first half
+  const htLambdaH_factor = 0.40;
+  const htLambdaA_factor = 0.40;
+  // estimate from full-time
+  const lambdaH_est = Math.max(0.5, -Math.log(pU25 + 0.001) * 0.6);
+  const lambdaA_est = Math.max(0.3, lambdaH_est * 0.7);
+  const htLH = lambdaH_est * htLambdaH_factor;
+  const htLA = lambdaA_est * htLambdaA_factor;
+
+  for (let i = 0; i <= 3; i++) {
+    for (let j = 0; j <= 3; j++) {
+      const p = poissonProb(htLH, i) * poissonProb(htLA, j);
+      if (i > j) pHH += p;
+      else if (i === j) pHD += p;
+      else pHA += p;
+      const t = i + j;
+      if (t > 0.5) pO05H += p; else pU05H += p;
+      if (t > 1.5) pO15H += p; else pU15H += p;
+    }
+  }
+
+  return { pH, pD, pA, pBTTS, pNoBTTS, pO25, pU25, pO35, pU35, pHH, pHD, pHA, pO05H, pU05H, pO15H, pU15H };
+}
+
+function calcEV(modelProb, odds) {
+  if (!odds || odds <= 1 || !modelProb) return null;
+  const impliedP = 1 / odds;
+  return (modelProb * odds - 1) * 100; // EV in %
+}
+
+function analyzeJogo(jogo) {
+  const odds = jogo.odds;
+  const rho = -0.13; // typical Dixon-Coles rho
+
+  // Infer lambdas from odds and xG if available
+  let lambdaH, lambdaA;
+  if (jogo.xgData && jogo.xgData.xgH && jogo.xgData.xgA) {
+    lambdaH = jogo.xgData.xgH;
+    lambdaA = jogo.xgData.xgA;
+  } else {
+    // Estimate from implied probabilities
+    const impH = odds.h > 1 ? 1/odds.h : 0.45;
+    const impA = odds.a > 1 ? 1/odds.a : 0.28;
+    const margin = impH + (odds.d > 1 ? 1/odds.d : 0.27) + impA;
+    const fairH = impH / margin;
+    const fairA = impA / margin;
+    // Rough lambda estimation
+    lambdaH = Math.max(0.4, -Math.log(Math.max(0.01, 1 - fairH)) * 1.1 + 0.3);
+    lambdaA = Math.max(0.3, -Math.log(Math.max(0.01, 1 - fairA)) * 0.9 + 0.2);
+    // Adjust for over/under if available
+    if (odds.o25 > 1) {
+      const pO25_implied = 1 / odds.o25;
+      const targetTotal = pO25_implied > 0.5 ? 2.8 : 2.2;
+      const scale = targetTotal / (lambdaH + lambdaA);
+      lambdaH *= scale;
+      lambdaA *= scale;
+    }
+  }
+
+  lambdaH = Math.max(0.2, Math.min(4, lambdaH));
+  lambdaA = Math.max(0.2, Math.min(4, lambdaA));
+
+  const matrix = dixonColesMatrix(lambdaH, lambdaA, rho);
+  const probs = calcMarketsFromMatrix(matrix);
+
+  const mkts = state.markets;
+  const minOdds = state.minOdds;
+  const maxOdds = state.maxOdds;
+
+  const candidates = [];
+
+  const add = (market, label, prob, odd, sign) => {
+    if (!odd || odd < minOdds || odd > maxOdds) return;
+    const ev = calcEV(prob, odd);
+    if (ev === null) return;
+    candidates.push({ market, label, prob, odd, ev, sign });
+  };
+
+  if (mkts['1x2']) {
+    add('1X2', 'Vitória Casa', probs.pH, odds.h, '1');
+    add('1X2', 'Empate', probs.pD, odds.d, 'X');
+    add('1X2', 'Vitória Fora', probs.pA, odds.a, '2');
+  }
+  if (mkts['ht']) {
+    add('HT 1X2', 'HT Casa', probs.pHH, odds.ht_h, 'HT1');
+    add('HT 1X2', 'HT Empate', probs.pHD, odds.ht_d, 'HTX');
+    add('HT 1X2', 'HT Fora', probs.pHA, odds.ht_a, 'HT2');
+  }
+  if (mkts['btts']) {
+    add('BTTS', 'Ambas Marcam Sim', probs.pBTTS, odds.btts_s, 'S');
+    add('BTTS', 'Ambas Marcam Não', probs.pNoBTTS, odds.btts_n, 'N');
+  }
+  if (mkts['ou25']) {
+    add('Total Golos', 'Over 2.5', probs.pO25, odds.o25, 'O2.5');
+    add('Total Golos', 'Under 2.5', probs.pU25, odds.u25, 'U2.5');
+  }
+  if (mkts['ou35']) {
+    add('Total Golos', 'Over 3.5', probs.pO35, odds.o35, 'O3.5');
+    add('Total Golos', 'Under 3.5', probs.pU35, odds.u35, 'U3.5');
+  }
+  if (mkts['btts-ht']) {
+    add('BTTS 1ªP', 'BTTS 1ªP Sim', probs.pBTTS * 0.28, odds.btts_ht_s || 0, 'BTTS HT S');
+  }
+  if (mkts['ou05h']) {
+    add('1ªP Golos', 'Over 0,5 (1ªP)', probs.pO05H, odds.o05h, 'O0.5HT');
+  }
+  if (mkts['ou15h']) {
+    add('1ªP Golos', 'Over 1,5 (1ªP)', probs.pO15H, odds.o15h, 'O1.5HT');
+  }
+
+  // Sort by EV desc
+  candidates.sort((a, b) => b.ev - a.ev);
+
+  return {
+    lambdaH, lambdaA, probs,
+    candidates,
+    bestBet: candidates.find(c => c.ev >= state.minEV) || null
+  };
+}
+
+function calcKellyStake(prob, odds) {
+  const b = odds - 1;
+  const q = 1 - prob;
+  const kelly = (b * prob - q) / b;
+  const fractional = kelly * (state.kellyFrac / 100);
+  const stake = fractional * state.banca;
+  return Math.max(1, Math.min(state.dailyLimit - state.dailySpent, Math.round(stake)));
+}
+
+// ══════════════════════════════════════════════════════════════
+// ANALYSIS PANEL
+// ══════════════════════════════════════════════════════════════
+function showAnaliseMain() {
+  document.getElementById('analise-empty').style.display = 'none';
+  document.getElementById('analise-main').style.display = 'block';
+  document.getElementById('analise-count').textContent = state.analises.length;
+  renderAnaliseList();
+}
+
+function renderAnaliseList() {
+  const list = document.getElementById('analise-list');
+  list.innerHTML = '';
+  state.analises.forEach((j, idx) => {
+    const card = document.createElement('div');
+    card.className = 'analysis-card';
+    card.id = 'acard-' + idx;
+
+    let statusHtml = '';
+    if (j.xgData) statusHtml += `<span class="badge badge-green">xG ✓</span> `;
+    if (j.news && j.news.length) statusHtml += `<span class="badge badge-blue">${j.news.length} notícias</span> `;
+    if (!j.xgData && !j.analyzed) statusHtml += `<span class="badge badge-gray">Pendente</span>`;
+
+    let analysisBody = '';
+    if (j.result) {
+      const r = j.result;
+      const best = r.bestBet;
+      analysisBody = `
+        <div class="analysis-body">
+          <div class="grid-3 mb-12">
+            <div>
+              <div class="text-xs text-dim mb-4">λ Casa (xG)</div>
+              <div class="fw-700" style="font-size:18px;color:var(--accent-blue)">${r.lambdaH.toFixed(2)}</div>
+            </div>
+            <div>
+              <div class="text-xs text-dim mb-4">λ Fora (xG)</div>
+              <div class="fw-700" style="font-size:18px;color:var(--accent-cyan)">${r.lambdaA.toFixed(2)}</div>
+            </div>
+            <div>
+              <div class="text-xs text-dim mb-4">Fonte xG</div>
+              <div class="text-sm fw-600">${j.xgData ? j.xgData.source || 'Understat' : 'Estimado'}</div>
+            </div>
+          </div>
+          <div class="mb-12">
+            <div class="text-xs text-dim mb-8">Probabilidades 1X2</div>
+            <div class="prob-row">
+              <div class="prob-label">Casa (1)</div>
+              <div class="prob-val" style="color:var(--accent-blue)">${(r.probs.pH*100).toFixed(1)}%</div>
+              <div style="flex:1;"><div class="prob-bar"><div class="prob-fill fill-blue" style="width:${(r.probs.pH*100).toFixed(0)}%"></div></div></div>
+            </div>
+            <div class="prob-row">
+              <div class="prob-label">Empate (X)</div>
+              <div class="prob-val">${(r.probs.pD*100).toFixed(1)}%</div>
+              <div style="flex:1;"><div class="prob-bar"><div class="prob-fill fill-gray" style="width:${(r.probs.pD*100).toFixed(0)}%"></div></div></div>
+            </div>
+            <div class="prob-row">
+              <div class="prob-label">Fora (2)</div>
+              <div class="prob-val" style="color:var(--accent-cyan)">${(r.probs.pA*100).toFixed(1)}%</div>
+              <div style="flex:1;"><div class="prob-bar"><div class="prob-fill" style="width:${(r.probs.pA*100).toFixed(0)}%;background:var(--accent-cyan)"></div></div></div>
+            </div>
+          </div>
+          <div class="mb-12">
+            <div class="text-xs text-dim mb-8">Todos os Mercados (+EV)</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+              ${r.candidates.filter(c => c.ev >= state.minEV).map(c => `
+                <span class="ev-chip ev-pos">
+                  ${c.sign} @ ${c.odd} · EV +${c.ev.toFixed(1)}%
+                </span>
+              `).join('') || '<span class="text-sm text-dim">Sem valor encontrado</span>'}
+            </div>
+          </div>
+          ${j.news && j.news.length ? `
+            <div class="mb-12">
+              <div class="text-xs text-dim mb-8">Notícias Relevantes</div>
+              ${j.news.map(n => `<div class="text-sm" style="padding:6px 0;border-bottom:1px solid var(--border);color:var(--text-secondary)">📰 ${n}</div>`).join('')}
+            </div>
+          ` : ''}
+          ${best ? `<div class="alert alert-success">⭐ Aposta recomendada: <strong>${best.label}</strong> @ ${best.odd} · EV: +${best.ev.toFixed(1)}%</div>` : `<div class="alert alert-warning">Sem valor positivo suficiente neste jogo.</div>`}
+        </div>
+      `;
+    }
+
+    card.innerHTML = `
+      <div class="analysis-header" onclick="toggleAnalysisCard(${idx})">
+        <div>
+          <div style="font-size:14px;font-weight:600;">${j.casa} vs ${j.fora}</div>
+          <div class="text-xs text-dim">${j.liga} · ${j.data} ${j.hora !== '—' ? j.hora : ''}</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          ${statusHtml}
+          <span style="color:var(--text-muted);font-size:18px;" id="arrow-${idx}">▸</span>
+        </div>
+      </div>
+      ${analysisBody}
+    `;
+    list.appendChild(card);
+  });
+}
+
+function toggleAnalysisCard(idx) {
+  const card = document.getElementById('acard-' + idx);
+  const arrow = document.getElementById('arrow-' + idx);
+  const body = card.querySelector('.analysis-body');
+  if (body) {
+    const visible = body.style.display !== 'none';
+    body.style.display = visible ? 'none' : 'block';
+    arrow.textContent = visible ? '▸' : '▾';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// FETCH DATA (xG + News)
+// ══════════════════════════════════════════════════════════════
+async function fetchAllData() {
+  const btn = document.getElementById('btn-fetch-data');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loader"></span> A buscar dados...';
+  const status = document.getElementById('fetch-status');
+  status.innerHTML = '<div class="alert alert-info">A tentar ligar ao backend para xG e notícias...</div>';
+
+  const backendUrl = state.backendUrl;
+
+  for (let i = 0; i < state.analises.length; i++) {
+    const j = state.analises[i];
+    status.innerHTML = `<div class="alert alert-info">A buscar dados para <strong>${j.casa} vs ${j.fora}</strong> (${i+1}/${state.analises.length})...</div>`;
+    try {
+      if (backendUrl) {
+        const res = await fetch(`${backendUrl}/xg?home=${encodeURIComponent(j.casa)}&away=${encodeURIComponent(j.fora)}&league=${encodeURIComponent(j.liga)}`);
+        if (res.ok) {
+          j.xgData = await res.json();
+        }
+      }
+      // Always try to get news
+      if (backendUrl) {
+        try {
+          const newsRes = await fetch(`${backendUrl}/news?home=${encodeURIComponent(j.casa)}&away=${encodeURIComponent(j.fora)}`);
+          if (newsRes.ok) {
+            const newsData = await newsRes.json();
+            j.news = newsData.news || [];
+          }
+        } catch(e) {}
+      }
+    } catch(e) {
+      // Backend not available - use estimation
+    }
+
+    // Fallback xG from historical data
+    if (!j.xgData) {
+      j.xgData = estimateXG(j);
+    }
+
+    state.analises[i] = j;
+    await new Promise(r => setTimeout(r, 200));
+  }
+
+  status.innerHTML = `<div class="alert alert-success">✓ Dados obtidos para ${state.analises.length} jogos. Podes agora clicar em "Analisar Todos".</div>`;
+  document.getElementById('btn-analyze-all').disabled = false;
+  btn.disabled = false;
+  btn.innerHTML = '🌐 Buscar xG + Notícias';
+  renderAnaliseList();
+  saveState();
+}
+
+function estimateXG(jogo) {
+  // Estimate xG from odds when no backend available
+  const o = jogo.odds;
+  let xgH = 1.35, xgA = 1.05;
+  if (o.h > 1 && o.a > 1) {
+    const impH = 1/o.h, impA = 1/o.a;
+    xgH = Math.max(0.3, impH * 3.0);
+    xgA = Math.max(0.3, impA * 2.5);
+    if (o.o25 > 1) {
+      const pO25 = 1/o.o25;
+      const scale = pO25 > 0.55 ? 1.15 : 0.92;
+      xgH *= scale; xgA *= scale;
+    }
+  }
+  return { xgH: parseFloat(xgH.toFixed(2)), xgA: parseFloat(xgA.toFixed(2)), source: 'Estimado (sem backend)' };
+}
+
+// ══════════════════════════════════════════════════════════════
+// RUN ANALYSIS
+// ══════════════════════════════════════════════════════════════
+function analyzeAll() {
+  const btn = document.getElementById('btn-analyze-all');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loader"></span> A analisar...';
+
+  setTimeout(() => {
+    state.analises.forEach((j, idx) => {
+      state.analises[idx].result = analyzeJogo(j);
+      state.analises[idx].analyzed = true;
+    });
+    buildRecommendations();
+    renderAnaliseList();
+    saveState();
+    btn.disabled = false;
+    btn.innerHTML = '⚡ Analisar Todos';
+    document.getElementById('btn-confirm-bets').disabled = false;
+    switchTab('recomendacoes');
+  }, 600);
+}
+
+function buildRecommendations() {
+  const recs = [];
+  let spent = 0;
+
+  state.analises.forEach(j => {
+    if (!j.result || !j.result.bestBet) return;
+    const best = j.result.bestBet;
+    if (best.ev < state.minEV) return;
+    const remaining = state.dailyLimit - spent;
+    if (remaining <= 0) return;
+
+    let stake;
+    if (state.staking === 'kelly') {
+      stake = calcKellyStake(best.prob, best.odd);
+    } else if (state.staking === 'flat') {
+      stake = Math.min(remaining, Math.round(state.dailyLimit / Math.max(1, state.analises.length)));
+    } else {
+      stake = Math.min(remaining, Math.max(1, Math.round((best.ev / 100) * state.banca * 0.1)));
+    }
+    stake = Math.min(remaining, Math.max(1, stake));
+    spent += stake;
+
+    const confidence = best.ev > 10 ? 'high' : best.ev > 5 ? 'medium' : 'low';
+    recs.push({ jogo: j, bet: best, stake, confidence });
+  });
+
+  state.recomendacoes = recs;
+  state.dailySpent = spent;
+
+  const badge = document.getElementById('badge-recs');
+  badge.textContent = recs.length;
+  badge.style.display = recs.length > 0 ? 'inline-block' : 'none';
+
+  renderRecomendacoes();
+}
+
+// ══════════════════════════════════════════════════════════════
+// RECOMENDAÇÕES
+// ══════════════════════════════════════════════════════════════
+function renderRecomendacoes() {
+  const main = document.getElementById('recs-main');
+  const empty = document.getElementById('recs-empty');
+  const list = document.getElementById('recs-list');
+  const noVal = document.getElementById('no-value-alert');
+  const totalStake = document.getElementById('total-stake');
+
+  if (state.analises.length === 0) {
+    main.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+
+  main.style.display = 'block';
+  empty.style.display = 'none';
+  list.innerHTML = '';
+
+  const recs = state.recomendacoes;
+  let total = 0;
+
+  if (recs.length === 0) {
+    noVal.style.display = 'block';
+    totalStake.textContent = '0';
+    return;
+  }
+  noVal.style.display = 'none';
+
+  recs.forEach((rec, idx) => {
+    const b = rec.bet;
+    const j = rec.jogo;
+    total += rec.stake;
+
+    const potProfit = ((b.odd - 1) * rec.stake).toFixed(2);
+    const card = document.createElement('div');
+    card.className = `rec-card ${rec.confidence}`;
+    card.innerHTML = `
+      <div class="rec-top">
+        <div>
+          <div class="rec-market">${b.market}</div>
+          <div class="rec-bet">${b.label} @ <span style="color:var(--accent-amber)">${b.odd}</span></div>
+          <div class="text-sm text-muted" style="margin-top:4px">${j.casa} vs ${j.fora} · ${j.liga}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="stake-label">APOSTAR</div>
+          <div class="stake-big">€${rec.stake}</div>
+          <div class="text-xs text-dim">Retorno potencial: €${potProfit}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+        <span class="ev-chip ev-pos">+EV ${b.ev.toFixed(1)}%</span>
+        <span class="badge badge-blue">Prob. Modelo: ${(b.prob*100).toFixed(1)}%</span>
+        <span class="badge badge-gray">Prob. Implícita: ${(100/b.odd).toFixed(1)}%</span>
+        <span class="badge ${rec.confidence === 'high' ? 'badge-green' : rec.confidence === 'medium' ? 'badge-amber' : 'badge-blue'}">
+          Confiança: ${rec.confidence === 'high' ? 'Alta' : rec.confidence === 'medium' ? 'Média' : 'Baixa'}
+        </span>
+      </div>
+      ${j.news && j.news.length ? `<div class="text-xs text-muted" style="margin-top:8px">📰 ${j.news[0]}</div>` : ''}
+    `;
+    list.appendChild(card);
+  });
+
+  totalStake.textContent = total.toFixed(0);
+  document.getElementById('daily-remaining').textContent = `€${(state.dailyLimit - total).toFixed(0)}`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// CONFIRM BETS → HISTORY
+// ══════════════════════════════════════════════════════════════
+function confirmBets() {
+  if (state.recomendacoes.length === 0) { alert('Sem apostas para confirmar.'); return; }
+  state.recomendacoes.forEach(rec => {
+    state.historico.push({
+      id: Date.now() + Math.random(),
+      date: new Date().toLocaleDateString('pt-PT'),
+      jogo: `${rec.jogo.casa} vs ${rec.jogo.fora}`,
+      liga: rec.jogo.liga,
+      market: rec.bet.market,
+      bet: rec.bet.label,
+      odd: rec.bet.odd,
+      stake: rec.stake,
+      ev: rec.bet.ev,
+      resultFinal: '',
+      resultHT: '',
+      xgFinal: '',
+      xgHT: '',
+      settled: false,
+      won: null,
+      profit: null
+    });
+  });
+  saveState();
+  renderHistorico();
+  switchTab('historico');
+  alert(`✓ ${state.recomendacoes.length} aposta(s) adicionadas ao histórico.`);
+}
+
+function clearAnalise() {
+  if (!confirm('Limpar análise?')) return;
+  state.analises = [];
+  state.recomendacoes = [];
+  saveState();
+  document.getElementById('analise-empty').style.display = 'block';
+  document.getElementById('analise-main').style.display = 'none';
+  document.getElementById('badge-analise').style.display = 'none';
+  document.getElementById('badge-recs').style.display = 'none';
+}
+
+// ══════════════════════════════════════════════════════════════
+// HISTÓRICO
+// ══════════════════════════════════════════════════════════════
+function renderHistorico() {
+  const empty = document.getElementById('historico-empty');
+  const main = document.getElementById('historico-main');
+  const list = document.getElementById('historico-list');
+
+  if (state.historico.length === 0) {
+    empty.style.display = 'block';
+    main.style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  main.style.display = 'block';
+  list.innerHTML = '';
+
+  [...state.historico].reverse().forEach((h, ridx) => {
+    const idx = state.historico.length - 1 - ridx;
+    const div = document.createElement('div');
+    div.className = 'hist-row';
+
+    let settleBtn = '';
+    if (!h.settled) {
+      settleBtn = `<button class="btn btn-success" style="font-size:12px;padding:6px 10px;" onclick="settleEntry(${idx})">✓ Liquidar</button>`;
+    } else {
+      const color = h.won ? 'var(--accent-green)' : 'var(--accent-red)';
+      const label = h.won ? `+€${h.profit}` : `-€${h.stake}`;
+      settleBtn = `<span class="badge ${h.won ? 'badge-green' : 'badge-red'}" style="font-size:13px">${label}</span>`;
+    }
+
+    div.innerHTML = `
+      <div>
+        <div class="text-sm fw-600">${h.jogo}</div>
+        <div class="text-xs text-dim">${h.market} · ${h.bet} @ ${h.odd} · €${h.stake} · EV +${h.ev.toFixed(1)}%</div>
+        <div class="text-xs text-dim">${h.liga} · ${h.date}</div>
+      </div>
+      <input class="result-input" placeholder="ex: 2-1" value="${h.resultFinal}" onchange="updateHistory(${idx},'resultFinal',this.value)">
+      <input class="result-input" placeholder="ex: 1-0" value="${h.resultHT}" onchange="updateHistory(${idx},'resultHT',this.value)">
+      <input class="result-input" placeholder="ex: 1.8-0.9" value="${h.xgFinal}" onchange="updateHistory(${idx},'xgFinal',this.value)">
+      <input class="result-input" placeholder="ex: 0.7-0.2" value="${h.xgHT}" onchange="updateHistory(${idx},'xgHT',this.value)">
+      <div>${settleBtn}</div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function updateHistory(idx, field, val) {
+  state.historico[idx][field] = val;
+  saveState();
+}
+
+function settleEntry(idx) {
+  const h = state.historico[idx];
+  if (!h.resultFinal) { alert('Insere o resultado final primeiro.'); return; }
+
+  const [homeGoals, awayGoals] = h.resultFinal.split(/[-:]/).map(Number);
+  let won = false;
+
+  const bet = h.bet.toLowerCase();
+  const sign = h.market;
+
+  if (sign === '1X2') {
+    if (bet.includes('casa') && homeGoals > awayGoals) won = true;
+    else if (bet.includes('empate') && homeGoals === awayGoals) won = true;
+    else if (bet.includes('fora') && awayGoals > homeGoals) won = true;
+  } else if (sign === 'BTTS') {
+    const btts = homeGoals > 0 && awayGoals > 0;
+    if (bet.includes('sim') && btts) won = true;
+    if (bet.includes('não') && !btts) won = true;
+  } else if (sign === 'Total Golos') {
+    const tot = homeGoals + awayGoals;
+    if (bet.includes('over 2.5') && tot > 2.5) won = true;
+    if (bet.includes('under 2.5') && tot <= 2.5) won = true;
+    if (bet.includes('over 3.5') && tot > 3.5) won = true;
+    if (bet.includes('under 3.5') && tot <= 3.5) won = true;
+  } else if (sign === 'HT 1X2') {
+    if (!h.resultHT) { alert('Insere o resultado ao intervalo.'); return; }
+    const [htH, htA] = h.resultHT.split(/[-:]/).map(Number);
+    if (bet.includes('ht casa') && htH > htA) won = true;
+    if (bet.includes('ht empate') && htH === htA) won = true;
+    if (bet.includes('ht fora') && htA > htH) won = true;
+  } else if (sign === '1ªP Golos') {
+    if (!h.resultHT) { alert('Insere o resultado ao intervalo.'); return; }
+    const [htH, htA] = h.resultHT.split(/[-:]/).map(Number);
+    const tot1 = htH + htA;
+    if (bet.includes('over 0.5') && tot1 > 0.5) won = true;
+    if (bet.includes('under 0.5') && tot1 <= 0.5) won = true;
+    if (bet.includes('over 1.5') && tot1 > 1.5) won = true;
+    if (bet.includes('under 1.5') && tot1 <= 1.5) won = true;
+  }
+
+  const profit = won ? parseFloat(((h.odd - 1) * h.stake).toFixed(2)) : -h.stake;
+  state.historico[idx].settled = true;
+  state.historico[idx].won = won;
+  state.historico[idx].profit = profit;
+  state.banca += profit;
+  state.monthlyPL += profit;
+  if (won) state.totalWins++; else state.totalLosses++;
+  state.bancaHistory.push(parseFloat(state.banca.toFixed(2)));
+
+  saveState();
+  refreshTopBar();
+  renderHistorico();
+  refreshDashboard();
+}
+
+function exportHistorico() {
+  const rows = [['Data','Jogo','Liga','Mercado','Aposta','Odd','Stake','EV%','Res. Final','Res. HT','xG Final','xG HT','Resultado','Lucro']];
+  state.historico.forEach(h => {
+    rows.push([h.date, h.jogo, h.liga, h.market, h.bet, h.odd, h.stake, h.ev.toFixed(1), h.resultFinal, h.resultHT, h.xgFinal, h.xgHT, h.won === null ? '—' : (h.won ? 'Ganhou' : 'Perdeu'), h.profit !== null ? h.profit : '—']);
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Historico');
+  XLSX.writeFile(wb, 'historico_betanalytics.xlsx');
+}
+
+// ══════════════════════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════════════════════
+function refreshDashboard() {
+  document.getElementById('dash-banca').textContent = `€${state.banca.toLocaleString('pt-PT', {minimumFractionDigits:0})}`;
+  document.getElementById('dash-monthly').textContent = `€${state.monthlyPL.toFixed(0)}`;
+  document.getElementById('dash-banca').style.color = state.banca >= 2000 ? 'var(--accent-green)' : state.banca >= 1800 ? 'var(--accent-amber)' : 'var(--accent-red)';
+  document.getElementById('dash-monthly').style.color = state.monthlyPL >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+
+  const settled = state.historico.filter(h => h.settled);
+  const todayBets = state.historico.filter(h => h.date === new Date().toLocaleDateString('pt-PT'));
+  const todaySpent = todayBets.reduce((s, h) => s + h.stake, 0);
+  document.getElementById('dash-today').textContent = todayBets.length;
+  document.getElementById('dash-today-spend').textContent = `Gasto: €${todaySpent} / €${state.dailyLimit}`;
+
+  const hitRate = settled.length > 0 ? (state.totalWins / settled.length * 100).toFixed(0) + '%' : '—';
+  document.getElementById('dash-hit-rate').textContent = hitRate;
+  document.getElementById('dash-record').textContent = `${state.totalWins}V / ${state.totalLosses}D`;
+
+  const roi = settled.length > 0 ? (state.monthlyPL / (settled.reduce((s, h) => s + h.stake, 0) || 1) * 100).toFixed(1) + '%' : '—';
+  document.getElementById('dash-roi').textContent = roi;
+  document.getElementById('dash-roi').style.color = parseFloat(roi) > 0 ? 'var(--accent-green)' : parseFloat(roi) < 0 ? 'var(--accent-red)' : 'var(--text-secondary)';
+
+  const pct = Math.min(100, Math.max(0, state.monthlyPL / state.monthlyGoal * 100));
+  document.getElementById('prog-val').textContent = state.monthlyPL.toFixed(0);
+  document.getElementById('prog-pct').textContent = pct.toFixed(0);
+  document.getElementById('prog-bar').style.width = pct + '%';
+
+  // sparkline
+  const spark = document.getElementById('sparkline');
+  const history = state.bancaHistory.slice(-20);
+  const min = Math.min(...history), max = Math.max(...history);
+  const range = max - min || 1;
+  spark.innerHTML = history.map(v => {
+    const h = Math.max(4, Math.round((v - min) / range * 28));
+    const color = v >= history[0] ? 'var(--accent-green)' : 'var(--accent-red)';
+    return `<div class="spark-bar" style="height:${h}px;background:${color}"></div>`;
+  }).join('');
+
+  // recent bets
+  const recent = [...state.historico].reverse().slice(0, 5);
+  const recDiv = document.getElementById('dash-recent');
+  if (recent.length === 0) {
+    recDiv.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">Sem histórico ainda</div></div>';
+  } else {
+    recDiv.innerHTML = `<table class="tbl"><thead><tr><th>Jogo</th><th>Aposta</th><th>Odds</th><th>Stake</th><th>P&L</th></tr></thead><tbody>
+      ${recent.map(h => `<tr>
+        <td>${h.jogo}<div class="text-xs text-dim">${h.liga}</div></td>
+        <td>${h.bet}</td>
+        <td>${h.odd}</td>
+        <td class="num">€${h.stake}</td>
+        <td class="num" style="color:${h.profit > 0 ? 'var(--accent-green)' : h.profit < 0 ? 'var(--accent-red)' : 'var(--text-muted)'}">
+          ${h.profit !== null ? (h.profit > 0 ? '+' : '') + '€' + h.profit : '—'}
+        </td>
+      </tr>`).join('')}
+    </tbody></table>`;
+  }
+}
+
+function refreshTopBar() {
+  document.getElementById('banca-display').textContent = `€${state.banca.toLocaleString('pt-PT', {minimumFractionDigits:0})}`;
+  const remaining = state.dailyLimit - state.dailySpent;
+  document.getElementById('daily-remaining').textContent = `€${Math.max(0, remaining).toFixed(0)}`;
+  const pl = state.monthlyPL;
+  const plEl = document.getElementById('monthly-pl');
+  plEl.textContent = (pl >= 0 ? '+' : '') + `€${pl.toFixed(0)}`;
+  plEl.style.color = pl > 0 ? 'var(--accent-green)' : pl < 0 ? 'var(--accent-red)' : 'var(--text-secondary)';
+}
+
+// ══════════════════════════════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════════════════════════════
+function saveConfig() {
+  state.banca = parseFloat(document.getElementById('cfg-banca').value) || 2000;
+  state.dailyLimit = parseFloat(document.getElementById('cfg-daily').value) || 100;
+  state.monthlyGoal = parseFloat(document.getElementById('cfg-monthly-goal').value) || 500;
+  state.minEV = parseFloat(document.getElementById('cfg-min-ev').value) || 3;
+  state.staking = document.getElementById('cfg-staking').value;
+  state.kellyFrac = parseFloat(document.getElementById('cfg-kelly-frac').value) || 25;
+  state.minOdds = parseFloat(document.getElementById('cfg-min-odds').value) || 1.30;
+  state.maxOdds = parseFloat(document.getElementById('cfg-max-odds').value) || 5.00;
+  state.backendUrl = document.getElementById('cfg-backend').value.trim().replace(/\/+$/, '');
+  state.fdKey = document.getElementById('cfg-fd-key').value.trim();
+  state.markets = {
+    '1x2': document.getElementById('mkt-1x2').checked,
+    'ht': document.getElementById('mkt-ht').checked,
+    'btts': document.getElementById('mkt-btts').checked,
+    'btts-ht': document.getElementById('mkt-btts-ht').checked,
+    'ou25': document.getElementById('mkt-ou25').checked,
+    'ou35': document.getElementById('mkt-ou35').checked,
+    'ou05h': document.getElementById('mkt-ou05h').checked,
+    'ou15h': document.getElementById('mkt-ou15h').checked,
+  };
+  saveState();
+  refreshTopBar();
+}
+
+function loadConfig() {
+  document.getElementById('cfg-banca').value = state.banca;
+  document.getElementById('cfg-daily').value = state.dailyLimit;
+  document.getElementById('cfg-monthly-goal').value = state.monthlyGoal;
+  document.getElementById('cfg-min-ev').value = state.minEV;
+  document.getElementById('cfg-staking').value = state.staking;
+  document.getElementById('cfg-kelly-frac').value = state.kellyFrac;
+  document.getElementById('cfg-min-odds').value = state.minOdds;
+  document.getElementById('cfg-max-odds').value = state.maxOdds;
+  if (state.backendUrl) document.getElementById('cfg-backend').value = state.backendUrl;
+  if (state.fdKey) document.getElementById('cfg-fd-key').value = state.fdKey;
+  Object.entries(state.markets).forEach(([k, v]) => {
+    const el = document.getElementById('mkt-' + k);
+    if (el) el.checked = v;
+  });
+}
+
+async function testBackend() {
+  const url = document.getElementById('cfg-backend').value.trim();
+  const btn = event.target;
+  const originalText = btn.innerHTML;
+
+  if (!url) {
+    showBackendStatus('⚠️ Insere o URL do backend primeiro.', 'warning');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loader"></span> A testar (pode demorar até 50s se o serviço estava a dormir)...';
+  showBackendStatus('🔄 A contactar o backend... isto pode demorar até 50 segundos se o serviço estava inativo (plano gratuito do Render).', 'info');
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const res = await fetch(url + '/ping', { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      showBackendStatus(`✓ Backend ligado com sucesso! (${data.message || 'OK'})`, 'success');
+    } else {
+      showBackendStatus(`⚠️ Backend respondeu mas com erro: ${res.status}`, 'warning');
+    }
+  } catch(e) {
+    if (e.name === 'AbortError') {
+      showBackendStatus('❌ Tempo limite excedido (60s). O serviço Render pode estar a dormir — tenta novamente.', 'danger');
+    } else {
+      showBackendStatus(`❌ Não foi possível ligar ao backend: ${e.message}. Verifica o URL (sem "/" no final) e se está ativo no Render.`, 'danger');
+    }
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
+}
+
+function showBackendStatus(message, type) {
+  let statusDiv = document.getElementById('backend-status-msg');
+  if (!statusDiv) {
+    statusDiv = document.createElement('div');
+    statusDiv.id = 'backend-status-msg';
+    statusDiv.style.marginTop = '12px';
+    document.querySelector('#sec-config .card:last-child').appendChild(statusDiv);
+  }
+  statusDiv.className = `alert alert-${type}`;
+  statusDiv.textContent = message;
+}
+
+// Drag & drop
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const wb = XLSX.read(ev.target.result, { type: 'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      parseExcelData(XLSX.utils.sheet_to_json(ws, { header: 1 }));
+    };
+    reader.readAsBinaryString(file);
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════
+loadState();
+loadConfig();
+refreshTopBar();
+refreshDashboard();
+if (state.historico.length > 0) renderHistorico();
+if (state.analises.length > 0) {
+  showAnaliseMain();
+  document.getElementById('badge-analise').textContent = state.analises.length;
+  document.getElementById('badge-analise').style.display = 'inline-block';
+}
+if (state.recomendacoes.length > 0) {
+  renderRecomendacoes();
+  document.getElementById('badge-recs').textContent = state.recomendacoes.length;
+  document.getElementById('badge-recs').style.display = 'inline-block';
+}
+if (state.jogos.length > 0) {
+  renderJogos();
+  document.getElementById('badge-jogos').textContent = state.jogos.length;
+  document.getElementById('badge-jogos').style.display = 'inline-block';
+}
+</script>
+</body>
+</html>
