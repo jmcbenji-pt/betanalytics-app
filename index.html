@@ -259,6 +259,7 @@
   <div class="tab" onclick="switchTab('analise')">🔬 Análise <span class="tab-badge" id="badge-analise" style="display:none">0</span></div>
   <div class="tab" onclick="switchTab('recomendacoes')">⭐ Recomendações <span class="tab-badge green" id="badge-recs" style="display:none">0</span></div>
   <div class="tab" onclick="switchTab('historico')">📋 Histórico</div>
+  <div class="tab" onclick="switchTab('calibracao')">🎯 Calibração <span class="tab-badge" id="badge-calib" style="display:none">0</span></div>
   <div class="tab" onclick="switchTab('config')">⚙️ Configurações</div>
 </div>
 
@@ -450,6 +451,46 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════ CALIBRAÇÃO ═══════════════════════════════ -->
+<div class="section" id="sec-calibracao">
+  <div class="card mb-16">
+    <div class="card-header">
+      <div>
+        <div class="card-title" style="margin-bottom:4px">Backtesting — Calibração por Resultados Históricos</div>
+        <div class="text-sm text-muted">Importa um lote de resultados passados para calibrar a força de ataque/defesa de cada equipa, em vez de inserir jogo a jogo</div>
+      </div>
+    </div>
+    <div class="alert alert-info mb-16">
+      ℹ️ Aceita dois formatos: o teu template habitual (com colunas de golos ou resultado final) ou ficheiros do <strong>football-data.co.uk</strong> (Date, HomeTeam, AwayTeam, FTHG, FTAG...). A app deteta automaticamente qual é qual. Recomendado: pelo menos uma temporada completa (200+ jogos) por liga para uma calibração fiável.
+    </div>
+    <div class="upload-zone" id="drop-zone-calib" onclick="document.getElementById('calib-input').click()">
+      <div class="upload-icon">📈</div>
+      <div class="upload-title">Arrastar Excel/CSV de resultados históricos aqui</div>
+      <div class="upload-sub">Podes importar várias ligas/temporadas — a app agrupa automaticamente por liga (coluna Liga ou Div)</div>
+    </div>
+    <input type="file" id="calib-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleCalibFile(event)">
+    <div id="calib-import-status"></div>
+  </div>
+
+  <div id="calib-empty" class="card">
+    <div class="empty-state">
+      <div class="empty-icon">🎯</div>
+      <div class="empty-title">Sem calibrações ainda</div>
+      <div class="empty-sub">Importa histórico de resultados para calibrar as equipas por liga</div>
+    </div>
+  </div>
+
+  <div id="calib-main" style="display:none">
+    <div class="card mb-16">
+      <div class="card-header">
+        <div class="card-title" style="margin-bottom:0">Ligas Calibradas</div>
+        <button class="btn btn-danger btn-ghost" onclick="clearAllCalibrations()">🗑 Limpar Todas</button>
+      </div>
+      <div id="calib-leagues-list"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════ CONFIGURAÇÕES ═══════════════════════════════ -->
 <div class="section" id="sec-config">
   <div class="grid-2">
@@ -587,7 +628,9 @@ let state = {
   markets: { '1x2':true, 'ht':true, 'btts':true, 'btts-ht':true, 'ou25':true, 'ou35':true, 'ou05h':true, 'ou15h':true },
   backendUrl: '',
   fdKey: '',
-  bancaHistory: [2000]
+  bancaHistory: [2000],
+  calibrationRawMatches: {},
+  calibrations: {}
 };
 
 function loadState() {
@@ -612,7 +655,7 @@ function switchTab(id) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.getElementById('sec-' + id).classList.add('active');
   const tabs = document.querySelectorAll('.tab');
-  const map = { dashboard:0, jogos:1, analise:2, recomendacoes:3, historico:4, config:5 };
+  const map = { dashboard:0, jogos:1, analise:2, recomendacoes:3, historico:4, calibracao:5, config:6 };
   tabs[map[id]].classList.add('active');
   if (id === 'dashboard') refreshDashboard();
 }
@@ -841,6 +884,512 @@ function tauCorrection(homeGoals, awayGoals, lambdaH, lambdaA, rho) {
   return 1;
 }
 
+// ══════════════════════════════════════════════════════════════
+// DIXON-COLES CALIBRATION ENGINE (BACKTESTING)
+// Fits per-team attack/defence strength + home advantage + rho from a batch
+// of historical results, via maximum likelihood with recency weighting.
+// Runs entirely client-side — no backend needed for this.
+// ══════════════════════════════════════════════════════════════
+
+function calibTauNLL(hg, ag, lamH, lamA, rho) {
+  if (hg === 0 && ag === 0) return 1 - lamH * lamA * rho;
+  if (hg === 0 && ag === 1) return 1 + lamH * rho;
+  if (hg === 1 && ag === 0) return 1 + lamA * rho;
+  if (hg === 1 && ag === 1) return 1 - rho;
+  return 1;
+}
+
+function calibNegLogLikelihood(params, teamIdx, matches, nTeams, xi) {
+  const attack = params.slice(0, nTeams);
+  const defence = params.slice(nTeams, 2 * nTeams);
+  const homeAdv = params[2 * nTeams];
+  const rho = params[2 * nTeams + 1];
+
+  let total = 0;
+  for (const m of matches) {
+    const hi = teamIdx[m.home], ai = teamIdx[m.away];
+    const lamH = Math.exp(attack[hi] + defence[ai] + homeAdv);
+    const lamA = Math.exp(attack[ai] + defence[hi]);
+    const pH = poissonProb(m.hg, lamH);
+    const pA = poissonProb(m.ag, lamA);
+    const t = calibTauNLL(m.hg, m.ag, lamH, lamA, rho);
+    const prob = Math.max(pH * pA * t, 1e-10);
+    const weight = Math.exp(-xi * m.daysAgo);
+    total += weight * Math.log(prob);
+  }
+  return -total;
+}
+
+function calibSmartInit(nTeams, teamIdx, matches) {
+  const goalsFor = new Array(nTeams).fill(0);
+  const goalsAgainst = new Array(nTeams).fill(0);
+  const gamesPlayed = new Array(nTeams).fill(0);
+
+  matches.forEach(m => {
+    const hi = teamIdx[m.home], ai = teamIdx[m.away];
+    goalsFor[hi] += m.hg; goalsAgainst[hi] += m.ag; gamesPlayed[hi]++;
+    goalsFor[ai] += m.ag; goalsAgainst[ai] += m.hg; gamesPlayed[ai]++;
+  });
+
+  const avgGoalsFor = goalsFor.map((g, i) => gamesPlayed[i] > 0 ? g / gamesPlayed[i] : 1.3);
+  const avgGoalsAgainst = goalsAgainst.map((g, i) => gamesPlayed[i] > 0 ? g / gamesPlayed[i] : 1.3);
+  const leagueAvg = avgGoalsFor.reduce((a, b) => a + b, 0) / nTeams;
+
+  const attackInit = avgGoalsFor.map(g => Math.log(Math.max(0.3, g) / Math.max(0.3, leagueAvg)));
+  const defenceInit = avgGoalsAgainst.map(g => Math.log(Math.max(0.3, g) / Math.max(0.3, leagueAvg)));
+
+  return attackInit.concat(defenceInit).concat([0.25, -0.08]);
+}
+
+// Block coordinate descent: sweeps all attack params, then all defence params, then
+// home advantage + rho, repeating until convergence. Handles the bilinear structure of
+// Dixon-Coles (attack × defence interaction) far better than naive single-param descent.
+function calibBlockDescent(initialParams, teamIdx, matches, nTeams, xi, maxRounds = 25) {
+  let params = [...initialParams];
+  let currentLoss = calibNegLogLikelihood(params, teamIdx, matches, nTeams, xi);
+
+  function sweepBlock(indices, stepInit, innerIters) {
+    let step = stepInit;
+    for (let it = 0; it < innerIters; it++) {
+      let improvedAny = false;
+      for (const p of indices) {
+        for (const dir of [1, -1]) {
+          const trial = [...params];
+          trial[p] += dir * step;
+          if (p === params.length - 1) trial[p] = Math.max(-0.3, Math.min(0.3, trial[p]));
+          const loss = calibNegLogLikelihood(trial, teamIdx, matches, nTeams, xi);
+          if (loss < currentLoss - 1e-7) {
+            params = trial;
+            currentLoss = loss;
+            improvedAny = true;
+          }
+        }
+      }
+      if (!improvedAny) {
+        step *= 0.6;
+        if (step < 0.0008) break;
+      }
+    }
+  }
+
+  const attackIdx = Array.from({ length: nTeams }, (_, i) => i);
+  const defenceIdx = Array.from({ length: nTeams }, (_, i) => nTeams + i);
+  const globalIdx = [2 * nTeams, 2 * nTeams + 1];
+
+  for (let round = 0; round < maxRounds; round++) {
+    const lossBefore = currentLoss;
+    sweepBlock(attackIdx, 0.25, 40);
+    sweepBlock(defenceIdx, 0.25, 40);
+    sweepBlock(globalIdx, 0.1, 30);
+    if (lossBefore - currentLoss < 1e-4) break;
+  }
+
+  return { params, loss: currentLoss };
+}
+
+// Main entry point: calibrate one league's teams from a list of historical matches.
+// matches: [{ home, away, hg, ag, daysAgo }]  (daysAgo = how many days before "today" the match was played)
+// Returns: { teams: { teamName: { attack, defence } }, homeAdvantage, rho, matchCount, leagueAvgGoals }
+function calibrateLeague(matches, options = {}) {
+  const xi = options.xi !== undefined ? options.xi : 0.0018; // time-decay rate; ~0.0018 halves weight every ~385 days
+
+  const teamSet = new Set();
+  matches.forEach(m => { teamSet.add(m.home); teamSet.add(m.away); });
+  const teams = Array.from(teamSet);
+  const nTeams = teams.length;
+
+  if (nTeams < 4 || matches.length < 20) {
+    return { error: `Dados insuficientes para calibrar (${teams.length} equipas, ${matches.length} jogos). Mínimo recomendado: 4 equipas e 20 jogos.` };
+  }
+
+  const teamIdx = {};
+  teams.forEach((t, i) => teamIdx[t] = i);
+
+  const x0 = calibSmartInit(nTeams, teamIdx, matches);
+  const { params: fitted, loss } = calibBlockDescent(x0, teamIdx, matches, nTeams, xi, 25);
+
+  let attackFit = fitted.slice(0, nTeams);
+  const defenceFit = fitted.slice(nTeams, 2 * nTeams);
+  const homeAdvFit = fitted[2 * nTeams];
+  const rhoFit = fitted[2 * nTeams + 1];
+
+  // Identifiability fix: center attack around 0
+  const meanAttack = attackFit.reduce((a, b) => a + b, 0) / nTeams;
+  attackFit = attackFit.map(a => a - meanAttack);
+
+  const leagueAvgGoals = matches.reduce((s, m) => s + m.hg + m.ag, 0) / matches.length / 2;
+
+  const teamParams = {};
+  teams.forEach((t, i) => {
+    teamParams[t] = { attack: attackFit[i], defence: defenceFit[i] };
+  });
+
+  return {
+    teams: teamParams,
+    homeAdvantage: homeAdvFit,
+    rho: rhoFit,
+    matchCount: matches.length,
+    teamCount: nTeams,
+    leagueAvgGoals,
+    loss
+  };
+}
+
+// Given calibrated parameters, compute the lambda (expected goals) for a specific upcoming match
+function lambdaFromCalibration(calibration, homeTeam, awayTeam) {
+  if (!calibration || !calibration.teams) return null;
+  const home = calibration.teams[homeTeam];
+  const away = calibration.teams[awayTeam];
+  if (!home || !away) return null; // team not in calibrated set — caller should fall back
+
+  const lambdaH = Math.exp(home.attack + away.defence + calibration.homeAdvantage);
+  const lambdaA = Math.exp(away.attack + home.defence);
+  return { lambdaH, lambdaA, rho: calibration.rho };
+}
+
+// ══════════════════════════════════════════════════════════════
+// BATCH HISTORICAL RESULTS IMPORT (for calibration)
+// Supports two formats:
+//  1) The app's own template style: Equipa Casa | Equipa Fora | Liga | Data | Golos Casa | Golos Fora ...
+//  2) football-data.co.uk style: Date | HomeTeam | AwayTeam | FTHG | FTAG | HTHG | HTAG | Div ...
+// ══════════════════════════════════════════════════════════════
+
+function excelSerialToDate(val) {
+  // Returns a JS Date object (not string) for daysAgo calculation
+  if (typeof val === 'number' && val > 20000) {
+    return new Date(Math.round((val - 25569) * 86400 * 1000));
+  }
+  if (typeof val === 'string') {
+    // Try dd/mm/yyyy first (PT format), then fall back to native Date parsing (handles football-data.co.uk's dd/mm/yy too)
+    const ptMatch = val.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+    if (ptMatch) {
+      let [, d, m, y] = ptMatch;
+      if (y.length === 2) y = '20' + y;
+      return new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+    }
+    const parsed = new Date(val);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+  return new Date(); // fallback: today (won't be time-weighted meaningfully, but won't crash)
+}
+
+function detectHistoryFormat(header) {
+  // football-data.co.uk signature columns
+  const fdcoukSignatures = ['hometeam', 'awayteam', 'fthg', 'ftag'];
+  const hasAll = fdcoukSignatures.every(sig => header.some(h => h.includes(sig)));
+  if (hasAll) return 'footballdatacouk';
+  return 'template';
+}
+
+function parseHistoryRows(rows) {
+  if (!rows || rows.length < 2) return { error: 'Ficheiro sem dados suficientes.' };
+
+  const header = rows[0].map(h => String(h || '').toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+
+  const format = detectHistoryFormat(header);
+  const matches = [];
+  const now = new Date();
+
+  const getIdx = (keys) => {
+    for (const k of keys) {
+      const idx = header.findIndex(h => h === k || h.includes(k));
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
+
+  if (format === 'footballdatacouk') {
+    const iDate = getIdx(['date']);
+    const iHome = getIdx(['hometeam']);
+    const iAway = getIdx(['awayteam']);
+    const iFTHG = getIdx(['fthg']);
+    const iFTAG = getIdx(['ftag']);
+    const iHTHG = getIdx(['hthg']);
+    const iHTAG = getIdx(['htag']);
+    const iDiv = getIdx(['div']);
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || row.every(c => c === undefined || c === '')) continue;
+      const home = row[iHome], away = row[iAway];
+      const hg = parseInt(row[iFTHG]), ag = parseInt(row[iFTAG]);
+      if (!home || !away || isNaN(hg) || isNaN(ag)) continue;
+
+      const matchDate = iDate >= 0 ? excelSerialToDate(row[iDate]) : now;
+      const daysAgo = Math.max(0, Math.round((now - matchDate) / 86400000));
+
+      matches.push({
+        home: String(home).trim(), away: String(away).trim(),
+        hg, ag,
+        htHg: iHTHG >= 0 ? parseInt(row[iHTHG]) : null,
+        htAg: iHTAG >= 0 ? parseInt(row[iHTAG]) : null,
+        liga: iDiv >= 0 ? String(row[iDiv]).trim() : 'Desconhecida',
+        daysAgo
+      });
+    }
+  } else {
+    // Template format — flexible column names matching what the user already uses,
+    // plus final/HT score columns which the Histórico tab already produces
+    const iHome = getIdx(['equipa casa', 'casa', 'home']);
+    const iAway = getIdx(['equipa fora', 'fora', 'away']);
+    const iLiga = getIdx(['liga', 'league']);
+    const iDate = getIdx(['data', 'date']);
+    const iScoreFinal = getIdx(['resultado final', 'resultado', 'golos', 'score', 'placar']);
+    const iHG = getIdx(['golos casa', 'gc', 'home goals', 'fthg']);
+    const iAG = getIdx(['golos fora', 'gf', 'away goals', 'ftag']);
+    const iHTScore = getIdx(['resultado intervalo', 'resultado ht', 'ht score']);
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || row.every(c => c === undefined || c === '')) continue;
+      const home = row[iHome], away = row[iAway];
+      if (!home || !away) continue;
+
+      let hg = null, ag = null;
+      if (iHG >= 0 && iAG >= 0 && row[iHG] !== undefined && row[iAG] !== undefined) {
+        hg = parseInt(row[iHG]); ag = parseInt(row[iAG]);
+      } else if (iScoreFinal >= 0 && row[iScoreFinal]) {
+        const m = String(row[iScoreFinal]).match(/(\d+)\s*[-:x]\s*(\d+)/i);
+        if (m) { hg = parseInt(m[1]); ag = parseInt(m[2]); }
+      }
+      if (hg === null || ag === null || isNaN(hg) || isNaN(ag)) continue;
+
+      let htHg = null, htAg = null;
+      if (iHTScore >= 0 && row[iHTScore]) {
+        const m = String(row[iHTScore]).match(/(\d+)\s*[-:x]\s*(\d+)/i);
+        if (m) { htHg = parseInt(m[1]); htAg = parseInt(m[2]); }
+      }
+
+      const matchDate = iDate >= 0 ? excelSerialToDate(row[iDate]) : now;
+      const daysAgo = Math.max(0, Math.round((now - matchDate) / 86400000));
+
+      matches.push({
+        home: String(home).trim(), away: String(away).trim(),
+        hg, ag, htHg, htAg,
+        liga: iLiga >= 0 ? String(row[iLiga]).trim() : 'Desconhecida',
+        daysAgo
+      });
+    }
+  }
+
+  if (matches.length === 0) {
+    return { error: 'Não foi possível reconhecer jogos com resultados válidos neste ficheiro. Verifica se tens colunas de golos/resultado.' };
+  }
+
+  return { matches, format, totalRows: rows.length - 1, parsedCount: matches.length };
+}
+
+// ══════════════════════════════════════════════════════════════
+// CALIBRATION TAB — UI LOGIC
+// ══════════════════════════════════════════════════════════════
+
+function handleCalibFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('calib-import-status');
+  status.innerHTML = '<div class="alert alert-info"><span class="loader"></span> A processar ficheiro...</div>';
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      const result = parseHistoryRows(rows);
+
+      if (result.error) {
+        status.innerHTML = `<div class="alert alert-danger">❌ ${result.error}</div>`;
+        return;
+      }
+
+      ingestHistoryMatches(result.matches, file.name);
+
+      const formatLabel = result.format === 'footballdatacouk' ? 'football-data.co.uk' : 'template da app';
+      status.innerHTML = `<div class="alert alert-success">✓ ${result.parsedCount} de ${result.totalRows} linhas reconhecidas como jogos válidos (formato detetado: ${formatLabel}). Agrupados por liga abaixo — clica "Calibrar" em cada uma.</div>`;
+    } catch(err) {
+      status.innerHTML = `<div class="alert alert-danger">❌ Erro ao ler o ficheiro: ${err.message}</div>`;
+    }
+  };
+  reader.readAsBinaryString(file);
+  event.target.value = ''; // allow re-selecting the same file later
+}
+
+function ingestHistoryMatches(matches, sourceFileName) {
+  if (!state.calibrationRawMatches) state.calibrationRawMatches = {};
+
+  matches.forEach(m => {
+    const ligaKey = normalizeName(m.liga || 'desconhecida');
+    if (!state.calibrationRawMatches[ligaKey]) {
+      state.calibrationRawMatches[ligaKey] = { displayName: m.liga || 'Desconhecida', matches: [] };
+    }
+    state.calibrationRawMatches[ligaKey].matches.push(m);
+  });
+
+  saveState();
+  renderCalibrationLeagues();
+}
+
+function normalizeName(name) {
+  // Shared helper also used by the calibration engine for team name matching consistency
+  return String(name).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function renderCalibrationLeagues() {
+  const empty = document.getElementById('calib-empty');
+  const main = document.getElementById('calib-main');
+  const list = document.getElementById('calib-leagues-list');
+  const badge = document.getElementById('badge-calib');
+
+  const leagueKeys = Object.keys(state.calibrationRawMatches || {});
+  if (leagueKeys.length === 0) {
+    empty.style.display = 'block';
+    main.style.display = 'none';
+    badge.style.display = 'none';
+    return;
+  }
+
+  empty.style.display = 'none';
+  main.style.display = 'block';
+
+  const calibratedCount = Object.keys(state.calibrations || {}).length;
+  badge.textContent = calibratedCount;
+  badge.style.display = calibratedCount > 0 ? 'inline-block' : 'none';
+
+  list.innerHTML = '';
+  leagueKeys.forEach(key => {
+    const leagueData = state.calibrationRawMatches[key];
+    const calib = state.calibrations?.[key];
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.marginBottom = '12px';
+
+    let calibInfo = '';
+    if (calib) {
+      if (calib.error) {
+        calibInfo = `<div class="alert alert-warning" style="margin-top:10px">${calib.error}</div>`;
+      } else {
+        const teamsSorted = Object.entries(calib.teams).sort((a, b) => b[1].attack - a[1].attack);
+        calibInfo = `
+          <div class="grid-3 mb-12" style="margin-top:12px">
+            <div class="stat-card" style="padding:12px">
+              <div class="stat-label">Equipas Calibradas</div>
+              <div class="stat-val blue" style="font-size:18px">${calib.teamCount}</div>
+            </div>
+            <div class="stat-card" style="padding:12px">
+              <div class="stat-label">Vantagem Casa</div>
+              <div class="stat-val green" style="font-size:18px">${(Math.exp(calib.homeAdvantage)*100-100).toFixed(0)}%</div>
+            </div>
+            <div class="stat-card" style="padding:12px">
+              <div class="stat-label">Média Golos/Jogo</div>
+              <div class="stat-val purple" style="font-size:18px">${calib.leagueAvgGoals.toFixed(2)}</div>
+            </div>
+          </div>
+          <div class="text-xs text-dim mb-8">Top 5 ataque mais forte · Top 5 defesa mais forte (valores relativos à média da liga)</div>
+          <div class="grid-2">
+            <div>
+              <div class="text-xs fw-600 mb-4" style="color:var(--accent-green)">⚔️ Melhor Ataque</div>
+              ${teamsSorted.slice(0,5).map(([t,p]) => `<div class="text-xs" style="padding:3px 0;color:var(--text-secondary)">${t}: <strong style="color:var(--text-primary)">${p.attack > 0 ? '+' : ''}${(p.attack*100).toFixed(0)}%</strong></div>`).join('')}
+            </div>
+            <div>
+              <div class="text-xs fw-600 mb-4" style="color:var(--accent-blue)">🛡️ Melhor Defesa</div>
+              ${teamsSorted.sort((a,b)=>a[1].defence-b[1].defence).slice(0,5).map(([t,p]) => `<div class="text-xs" style="padding:3px 0;color:var(--text-secondary)">${t}: <strong style="color:var(--text-primary)">${(p.defence*100).toFixed(0)}%</strong></div>`).join('')}
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    card.innerHTML = `
+      <div class="card-header" style="margin-bottom:0">
+        <div>
+          <div style="font-size:14px;font-weight:600;">${leagueData.displayName}</div>
+          <div class="text-xs text-dim">${leagueData.matches.length} jogos importados ${calib && !calib.error ? `· Calibrado (${calib.matchCount} jogos usados)` : '· Ainda não calibrado'}</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-danger btn-ghost" style="font-size:12px;padding:6px 10px" onclick="removeCalibrationLeague('${key}')">🗑 Remover</button>
+          <button class="btn btn-purple" style="font-size:12px;padding:6px 12px" onclick="runCalibration('${key}')">🎯 ${calib && !calib.error ? 'Recalibrar' : 'Calibrar'}</button>
+        </div>
+      </div>
+      ${calibInfo}
+    `;
+    list.appendChild(card);
+  });
+}
+
+function runCalibration(ligaKey) {
+  const leagueData = state.calibrationRawMatches[ligaKey];
+  if (!leagueData) return;
+
+  if (!state.calibrations) state.calibrations = {};
+
+  const result = calibrateLeague(leagueData.matches);
+  state.calibrations[ligaKey] = result;
+
+  saveState();
+  renderCalibrationLeagues();
+}
+
+function removeCalibrationLeague(ligaKey) {
+  if (!confirm('Remover esta liga e a respetiva calibração?')) return;
+  delete state.calibrationRawMatches[ligaKey];
+  if (state.calibrations) delete state.calibrations[ligaKey];
+  saveState();
+  renderCalibrationLeagues();
+}
+
+function clearAllCalibrations() {
+  if (!confirm('Limpar todas as ligas e calibrações importadas?')) return;
+  state.calibrationRawMatches = {};
+  state.calibrations = {};
+  saveState();
+  renderCalibrationLeagues();
+}
+
+// Looks up a calibration for a given league name + team pair, trying fuzzy matching on team names.
+// Returns { lambdaH, lambdaA, rho } or null if no usable calibration exists for this league/teams.
+function getCalibratedLambdas(ligaName, homeTeam, awayTeam) {
+  if (!state.calibrations) return null;
+  const ligaKey = normalizeName(ligaName || '');
+  const calib = state.calibrations[ligaKey];
+  if (!calib || calib.error) return null;
+
+  // Try exact match first, then fuzzy (team name contains / is contained by)
+  const findTeamKey = (name) => {
+    if (calib.teams[name]) return name;
+    const target = normalizeName(name);
+    return Object.keys(calib.teams).find(t => {
+      const nt = normalizeName(t);
+      return nt === target || nt.includes(target) || target.includes(nt);
+    }) || null;
+  };
+
+  const homeKey = findTeamKey(homeTeam);
+  const awayKey = findTeamKey(awayTeam);
+  if (!homeKey || !awayKey) return null;
+
+  return lambdaFromCalibration(calib, homeKey, awayKey);
+}
+
+// Drag & drop for calibration upload zone
+const dzCalib = document.getElementById('drop-zone-calib');
+if (dzCalib) {
+  dzCalib.addEventListener('dragover', e => { e.preventDefault(); dzCalib.classList.add('drag'); });
+  dzCalib.addEventListener('dragleave', () => dzCalib.classList.remove('drag'));
+  dzCalib.addEventListener('drop', e => {
+    e.preventDefault(); dzCalib.classList.remove('drag');
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      const fakeEvent = { target: { files: [file], value: '' } };
+      handleCalibFile(fakeEvent);
+    }
+  });
+}
+
 function dixonColesMatrix(lambdaH, lambdaA, rho, maxGoals = 6) {
   const matrix = [];
   let total = 0;
@@ -913,13 +1462,24 @@ function calcEV(modelProb, odds) {
 
 function analyzeJogo(jogo) {
   const odds = jogo.odds;
-  const rho = -0.13; // typical Dixon-Coles rho
+  let rho = -0.13; // typical Dixon-Coles rho; overridden below if a calibration is available
 
-  // Infer lambdas from odds and xG if available
-  let lambdaH, lambdaA;
-  if (jogo.xgData && jogo.xgData.xgH && jogo.xgData.xgA) {
+  // Priority order for lambda source: 1) own backtested calibration (most accurate, reflects real
+  // attack/defence strength) 2) Understat xG (good but generic, no home/away split per team)
+  // 3) odds-implied estimation (fallback when nothing else is available)
+  let lambdaH, lambdaA, lambdaSource = 'Estimado (odds)';
+
+  const calibResult = getCalibratedLambdas(jogo.liga, jogo.casa, jogo.fora);
+
+  if (calibResult) {
+    lambdaH = calibResult.lambdaH;
+    lambdaA = calibResult.lambdaA;
+    rho = calibResult.rho;
+    lambdaSource = 'Calibração própria (backtesting)';
+  } else if (jogo.xgData && jogo.xgData.xgH && jogo.xgData.xgA) {
     lambdaH = jogo.xgData.xgH;
     lambdaA = jogo.xgData.xgA;
+    lambdaSource = jogo.xgData.source || 'Understat';
   } else {
     // Estimate from implied probabilities
     const impH = odds.h > 1 ? 1/odds.h : 0.45;
@@ -1003,7 +1563,7 @@ function analyzeJogo(jogo) {
   candidates.sort((a, b) => b.ev - a.ev);
 
   return {
-    lambdaH, lambdaA, probs,
+    lambdaH, lambdaA, probs, lambdaSource,
     candidates,
     bestBet: candidates.find(c => c.ev >= state.minEV) || null
   };
@@ -1063,7 +1623,7 @@ function renderAnaliseList() {
             </div>
             <div>
               <div class="text-xs text-dim mb-4">Fonte xG</div>
-              <div class="text-sm fw-600">${j.xgData ? j.xgData.source || 'Understat' : 'Estimado'}</div>
+              <div class="text-sm fw-600" style="${r.lambdaSource === 'Calibração própria (backtesting)' ? 'color:var(--accent-purple)' : ''}">${r.lambdaSource || 'Estimado'}</div>
             </div>
           </div>
           <div class="mb-12">
@@ -1797,6 +2357,9 @@ if (state.jogos.length > 0) {
   renderJogos();
   document.getElementById('badge-jogos').textContent = state.jogos.length;
   document.getElementById('badge-jogos').style.display = 'inline-block';
+}
+if (Object.keys(state.calibrationRawMatches || {}).length > 0) {
+  renderCalibrationLeagues();
 }
 </script>
 </body>
