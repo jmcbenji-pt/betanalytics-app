@@ -998,13 +998,12 @@ function analyzeJogo(jogo) {
   };
 }
 
-function calcKellyStake(prob, odds) {
+function calcFullKelly(prob, odds) {
+  // Full (unfractioned) Kelly criterion — used to measure relative edge strength between bets
   const b = odds - 1;
   const q = 1 - prob;
   const kelly = (b * prob - q) / b;
-  const fractional = kelly * (state.kellyFrac / 100);
-  const stake = fractional * state.banca;
-  return Math.max(1, Math.min(state.dailyLimit - state.dailySpent, Math.round(stake)));
+  return Math.max(0, kelly);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1211,33 +1210,84 @@ function analyzeAll() {
 }
 
 function buildRecommendations() {
-  const recs = [];
-  let spent = 0;
-
+  // Step 1: collect the single best qualifying bet per game (already enforced by bestBet picking highest EV)
+  const qualifying = [];
   state.analises.forEach(j => {
     if (!j.result || !j.result.bestBet) return;
     const best = j.result.bestBet;
     if (best.ev < state.minEV) return;
-    const remaining = state.dailyLimit - spent;
-    if (remaining <= 0) return;
-
-    let stake;
-    if (state.staking === 'kelly') {
-      stake = calcKellyStake(best.prob, best.odd);
-    } else if (state.staking === 'flat') {
-      stake = Math.min(remaining, Math.round(state.dailyLimit / Math.max(1, state.analises.length)));
-    } else {
-      stake = Math.min(remaining, Math.max(1, Math.round((best.ev / 100) * state.banca * 0.1)));
-    }
-    stake = Math.min(remaining, Math.max(1, stake));
-    spent += stake;
-
-    const confidence = best.ev > 10 ? 'high' : best.ev > 5 ? 'medium' : 'low';
-    recs.push({ jogo: j, bet: best, stake, confidence });
+    qualifying.push({ jogo: j, bet: best });
   });
 
+  if (qualifying.length === 0) {
+    state.recomendacoes = [];
+    state.dailySpent = 0;
+    document.getElementById('badge-recs').style.display = 'none';
+    renderRecomendacoes();
+    return;
+  }
+
+  const dailyBudget = state.dailyLimit;
+  let recs;
+
+  if (state.staking === 'flat') {
+    // Equal split of daily budget across all qualifying games
+    const perBet = dailyBudget / qualifying.length;
+    recs = qualifying.map(q => ({ jogo: q.jogo, bet: q.bet, stake: Math.round(perBet) }));
+  } else {
+    // Each bet gets its own "ideal" stake first, based on its own edge — not normalized against the other bet.
+    // This is what was missing before: a strong 15% EV bet was being diluted just because a second, weaker
+    // bet existed in the same batch. Each bet's stake should reflect ITS OWN edge strength, then the set
+    // is scaled down only if the combined total would exceed the €100 daily cap.
+    const ideal = qualifying.map(q => {
+      let idealStake;
+      if (state.staking === 'proportional') {
+        // Proportional to EV: 1% EV → ~2€ of banca-scale risk, capped sensibly. Simple and direct.
+        idealStake = (q.bet.ev / 100) * state.banca * 0.15;
+      } else {
+        // Kelly: full Kelly criterion × fractional safety multiplier, applied to the BANCA (not the daily budget).
+        // This gives each bet a stake sized to its own edge, independent of how many other games exist today.
+        const fullKelly = calcFullKelly(q.bet.prob, q.bet.odd);
+        idealStake = fullKelly * (state.kellyFrac / 100) * state.banca;
+      }
+      return { jogo: q.jogo, bet: q.bet, idealStake: Math.max(1, idealStake) };
+    });
+
+    // Cap any single bet at 50% of the daily budget (diversification safety net) before totalling
+    const capped = ideal.map(r => ({ ...r, idealStake: Math.min(r.idealStake, dailyBudget * 0.5) }));
+
+    const totalIdeal = capped.reduce((s, r) => s + r.idealStake, 0);
+
+    if (totalIdeal <= dailyBudget) {
+      // Today's edges comfortably fit within the daily cap — use the ideal stakes as-is.
+      // This naturally leaves budget unused on weak-edge days, exactly as requested.
+      recs = capped.map(r => ({ jogo: r.jogo, bet: r.bet, stake: Math.round(r.idealStake) }));
+    } else {
+      // Combined ideal stakes exceed €100 — scale all down proportionally so the total fits exactly.
+      const scale = dailyBudget / totalIdeal;
+      recs = capped.map(r => ({ jogo: r.jogo, bet: r.bet, stake: Math.round(r.idealStake * scale) }));
+    }
+  }
+
+  // Step 2: round to whole euros, minimum €1 per recommended bet, never exceed daily budget in total
+  recs = recs.map(r => ({ ...r, stake: Math.max(1, r.stake) }));
+  let total = recs.reduce((s, r) => s + r.stake, 0);
+  if (total > dailyBudget) {
+    // Trim proportionally if rounding pushed us slightly over
+    const scale = dailyBudget / total;
+    recs.forEach(r => r.stake = Math.max(1, Math.floor(r.stake * scale)));
+    total = recs.reduce((s, r) => s + r.stake, 0);
+  }
+
+  // Sort by EV descending for display, attach confidence tier
+  recs.sort((a, b) => b.bet.ev - a.bet.ev);
+  recs = recs.map(r => ({
+    ...r,
+    confidence: r.bet.ev > 10 ? 'high' : r.bet.ev > 5 ? 'medium' : 'low'
+  }));
+
   state.recomendacoes = recs;
-  state.dailySpent = spent;
+  state.dailySpent = total;
 
   const badge = document.getElementById('badge-recs');
   badge.textContent = recs.length;
