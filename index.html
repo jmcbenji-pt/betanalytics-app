@@ -552,6 +552,9 @@
           </div>
           <input type="text" id="cfg-fd-key" placeholder="API Key" style="width:180px" onchange="saveConfig()">
         </div>
+        <div class="alert alert-info" style="margin-top:12px">
+          🤖 <strong>Análise por IA (lesões/notícias → ajuste de xG):</strong> requer uma chave gratuita do Groq, configurada diretamente no Render como variável de ambiente <code>GROQ_API_KEY</code> (não aqui na app, por segurança). Sem essa chave, a app funciona normalmente — só não aplica o ajuste automático de contexto.
+        </div>
         <button class="btn btn-ghost" style="margin-top:12px" onclick="testBackend()">🔌 Testar Ligação</button>
       </div>
     </div>
@@ -937,6 +940,14 @@ function analyzeJogo(jogo) {
     }
   }
 
+  // Apply contextual adjustment from LLM analysis (injuries/suspensions/news), if available.
+  // ajuste values are multiplicative deltas: e.g. -0.15 means "reduce this team's attacking lambda by 15%"
+  if (jogo.contextAdjustment) {
+    const adj = jogo.contextAdjustment;
+    if (typeof adj.ajuste_xg_casa === 'number') lambdaH = lambdaH * (1 + adj.ajuste_xg_casa);
+    if (typeof adj.ajuste_xg_fora === 'number') lambdaA = lambdaA * (1 + adj.ajuste_xg_fora);
+  }
+
   lambdaH = Math.max(0.2, Math.min(4, lambdaH));
   lambdaA = Math.max(0.2, Math.min(4, lambdaA));
 
@@ -1027,6 +1038,12 @@ function renderAnaliseList() {
     let statusHtml = '';
     if (j.xgData) statusHtml += `<span class="badge badge-green">xG ✓</span> `;
     if (j.news && j.news.length) statusHtml += `<span class="badge badge-blue">${j.news.length} notícias</span> `;
+    if (j.injuries && (j.injuries.home?.length || j.injuries.away?.length)) {
+      statusHtml += `<span class="badge badge-amber">${(j.injuries.home?.length||0) + (j.injuries.away?.length||0)} lesões/susp.</span> `;
+    }
+    if (j.contextAdjustment && (j.contextAdjustment.ajuste_xg_casa || j.contextAdjustment.ajuste_xg_fora)) {
+      statusHtml += `<span class="badge badge-purple">IA ajustou xG</span> `;
+    }
     if (!j.xgData && !j.analyzed) statusHtml += `<span class="badge badge-gray">Pendente</span>`;
 
     let analysisBody = '';
@@ -1083,6 +1100,37 @@ function renderAnaliseList() {
               ${j.news.map(n => `<div class="text-sm" style="padding:6px 0;border-bottom:1px solid var(--border);color:var(--text-secondary)">📰 ${n}</div>`).join('')}
             </div>
           ` : ''}
+          ${j.injuries && (j.injuries.home?.length || j.injuries.away?.length) ? `
+            <div class="mb-12">
+              <div class="text-xs text-dim mb-8">Lesões e Suspensões (Transfermarkt)</div>
+              <div class="grid-2">
+                <div>
+                  <div class="text-xs fw-600 mb-4" style="color:var(--accent-blue)">${j.casa}</div>
+                  ${(j.injuries.home || []).length > 0
+                    ? j.injuries.home.map(p => `<div class="text-xs" style="padding:4px 0;color:var(--text-secondary)">🤕 <strong>${p.player}</strong> (${p.position}) — ${p.reason}${p.expectedReturn !== '—' ? ', regresso: ' + p.expectedReturn : ''}</div>`).join('')
+                    : '<div class="text-xs text-dim">Sem ausências reportadas</div>'}
+                </div>
+                <div>
+                  <div class="text-xs fw-600 mb-4" style="color:var(--accent-cyan)">${j.fora}</div>
+                  ${(j.injuries.away || []).length > 0
+                    ? j.injuries.away.map(p => `<div class="text-xs" style="padding:4px 0;color:var(--text-secondary)">🤕 <strong>${p.player}</strong> (${p.position}) — ${p.reason}${p.expectedReturn !== '—' ? ', regresso: ' + p.expectedReturn : ''}</div>`).join('')
+                    : '<div class="text-xs text-dim">Sem ausências reportadas</div>'}
+                </div>
+              </div>
+            </div>
+          ` : ''}
+          ${j.contextAdjustment && j.contextAdjustment.resumo ? `
+            <div class="alert alert-info mb-12">
+              🤖 <strong>Ajuste IA (confiança: ${j.contextAdjustment.confianca || 'baixa'}):</strong> ${j.contextAdjustment.resumo}
+              ${(j.contextAdjustment.ajuste_xg_casa || j.contextAdjustment.ajuste_xg_fora) ? `
+                <div class="text-xs" style="margin-top:6px;opacity:0.85">
+                  ${j.contextAdjustment.ajuste_xg_casa ? `λ Casa: ${j.contextAdjustment.ajuste_xg_casa > 0 ? '+' : ''}${(j.contextAdjustment.ajuste_xg_casa*100).toFixed(0)}%` : ''}
+                  ${j.contextAdjustment.ajuste_xg_casa && j.contextAdjustment.ajuste_xg_fora ? ' · ' : ''}
+                  ${j.contextAdjustment.ajuste_xg_fora ? `λ Fora: ${j.contextAdjustment.ajuste_xg_fora > 0 ? '+' : ''}${(j.contextAdjustment.ajuste_xg_fora*100).toFixed(0)}%` : ''}
+                </div>
+              ` : ''}
+            </div>
+          ` : ''}
           ${best ? `<div class="alert alert-success">⭐ Aposta recomendada: <strong>${best.label}</strong> @ ${best.odd} · EV: +${best.ev.toFixed(1)}%</div>` : `<div class="alert alert-warning">Sem valor positivo suficiente neste jogo.</div>`}
         </div>
       `;
@@ -1124,7 +1172,7 @@ async function fetchAllData() {
   btn.disabled = true;
   btn.innerHTML = '<span class="loader"></span> A buscar dados...';
   const status = document.getElementById('fetch-status');
-  status.innerHTML = '<div class="alert alert-info">A tentar ligar ao backend para xG e notícias...</div>';
+  status.innerHTML = '<div class="alert alert-info">A tentar ligar ao backend para xG, lesões e notícias...</div>';
 
   const backendUrl = state.backendUrl;
 
@@ -1138,13 +1186,35 @@ async function fetchAllData() {
           j.xgData = await res.json();
         }
       }
-      // Always try to get news
+      // News + Transfermarkt injuries (now combined in one backend call)
+      let newsData = null;
       if (backendUrl) {
         try {
           const newsRes = await fetch(`${backendUrl}/news?home=${encodeURIComponent(j.casa)}&away=${encodeURIComponent(j.fora)}`);
           if (newsRes.ok) {
-            const newsData = await newsRes.json();
+            newsData = await newsRes.json();
             j.news = newsData.news || [];
+            j.injuries = newsData.injuries || { home: [], away: [] };
+          }
+        } catch(e) {}
+      }
+
+      // LLM contextual analysis (Groq) — only if backend configured and we have something to analyze
+      if (backendUrl && (j.news?.length || j.injuries?.home?.length || j.injuries?.away?.length)) {
+        try {
+          const ctxRes = await fetch(`${backendUrl}/analyze-context`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              home: j.casa,
+              away: j.fora,
+              news: j.news || [],
+              injuriesHome: j.injuries?.home || [],
+              injuriesAway: j.injuries?.away || []
+            })
+          });
+          if (ctxRes.ok) {
+            j.contextAdjustment = await ctxRes.json();
           }
         } catch(e) {}
       }
