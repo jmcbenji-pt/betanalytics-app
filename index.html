@@ -596,7 +596,14 @@
         <div class="alert alert-info" style="margin-top:12px">
           🤖 <strong>Análise por IA (lesões/notícias → ajuste de xG):</strong> requer uma chave gratuita do Groq, configurada diretamente no Render como variável de ambiente <code>GROQ_API_KEY</code> (não aqui na app, por segurança). Sem essa chave, a app funciona normalmente — só não aplica o ajuste automático de contexto.
         </div>
-        <button class="btn btn-ghost" style="margin-top:12px" onclick="testBackend()">🔌 Testar Ligação</button>
+        <div class="alert alert-info" style="margin-top:10px">
+          📰 <strong>NewsAPI</strong> e 🌍 <strong>API-Football</strong> também são configurados só no Render (<code>NEWSAPI_KEY</code> e <code>APIFOOTBALL_KEY</code>), nunca aqui na app — por segurança, estas chaves não devem ser coladas em nenhum campo de texto partilhável.
+        </div>
+        <div style="display:flex; gap:8px; margin-top:12px;">
+          <button class="btn btn-ghost" onclick="testBackend()">🔌 Testar Ligação</button>
+          <button class="btn btn-ghost" onclick="checkQuotaStatus()">📊 Ver Quota APIs</button>
+        </div>
+        <div id="quota-status-display"></div>
       </div>
     </div>
   </div>
@@ -1274,7 +1281,23 @@ function renderCalibrationLeagues() {
         calibInfo = `<div class="alert alert-warning" style="margin-top:10px">${calib.error}</div>`;
       } else {
         const teamsSorted = Object.entries(calib.teams).sort((a, b) => b[1].attack - a[1].attack);
+
+        let stalenessHtml = '';
+        if (calib.calibratedAt) {
+          const ageDays = Math.floor((new Date() - new Date(calib.calibratedAt)) / 86400000);
+          const newMatchesAvailable = leagueData.matches.length - (calib.matchCountAtCalibration || calib.matchCount);
+
+          if (ageDays > 60) {
+            stalenessHtml = `<div class="alert alert-warning" style="margin-top:10px">⏰ Calibrada há ${ageDays} dias. Considera recalibrar — pode estar desatualizada face à forma atual das equipas.${newMatchesAvailable > 0 ? ` (${newMatchesAvailable} jogo(s) novo(s) disponível(eis) desde então.)` : ''}</div>`;
+          } else if (newMatchesAvailable >= 5) {
+            stalenessHtml = `<div class="alert alert-info" style="margin-top:10px">📈 ${newMatchesAvailable} jogo(s) novo(s) desde a última calibração (há ${ageDays} dias) — vale a pena recalibrar.</div>`;
+          } else {
+            stalenessHtml = `<div class="text-xs text-dim" style="margin-top:8px">✓ Calibrada há ${ageDays} dia(s)${calib.fromTrackedBets ? ` · ${calib.fromTrackedBets} jogo(s) vieram do teu histórico de apostas` : ''}</div>`;
+          }
+        }
+
         calibInfo = `
+          ${stalenessHtml}
           <div class="grid-3 mb-12" style="margin-top:12px">
             <div class="stat-card" style="padding:12px">
               <div class="stat-label">Equipas Calibradas</div>
@@ -1328,6 +1351,9 @@ function runCalibration(ligaKey) {
   if (!state.calibrations) state.calibrations = {};
 
   const result = calibrateLeague(leagueData.matches);
+  result.calibratedAt = new Date().toISOString();
+  result.fromTrackedBets = leagueData.matches.filter(m => m._fromHistoryId).length;
+  result.matchCountAtCalibration = leagueData.matches.length; // snapshot for "X new matches since" comparison
   state.calibrations[ligaKey] = result;
 
   saveState();
@@ -2137,10 +2163,55 @@ function settleEntry(idx) {
   if (won) state.totalWins++; else state.totalLosses++;
   state.bancaHistory.push(parseFloat(state.banca.toFixed(2)));
 
+  // Passively feed this result into the calibration pool for its league, so the model keeps
+  // learning from the bets you actually track, even between full historical re-imports.
+  feedSettledResultToCalibration(h, homeGoals, awayGoals);
+
   saveState();
   refreshTopBar();
   renderHistorico();
   refreshDashboard();
+}
+
+function feedSettledResultToCalibration(historyEntry, homeGoals, awayGoals) {
+  const teamsMatch = historyEntry.jogo.match(/^(.+?)\s+vs\s+(.+)$/i);
+  if (!teamsMatch) return; // can't parse team names — skip silently, doesn't block settling the bet
+
+  const home = teamsMatch[1].trim();
+  const away = teamsMatch[2].trim();
+  const liga = historyEntry.liga || 'Desconhecida';
+  const ligaKey = normalizeName(liga);
+
+  let htHg = null, htAg = null;
+  if (historyEntry.resultHT) {
+    const htMatch = historyEntry.resultHT.match(/(\d+)\s*[-:x]\s*(\d+)/i);
+    if (htMatch) { htHg = parseInt(htMatch[1]); htAg = parseInt(htMatch[2]); }
+  }
+
+  // Parse the entry's own date (dd/mm/yyyy, as stored by toLocaleDateString('pt-PT')) for daysAgo
+  let daysAgo = 0;
+  const dateMatch = (historyEntry.date || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dateMatch) {
+    const [, d, m, y] = dateMatch;
+    const matchDate = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+    daysAgo = Math.max(0, Math.round((new Date() - matchDate) / 86400000));
+  }
+
+  if (!state.calibrationRawMatches) state.calibrationRawMatches = {};
+  if (!state.calibrationRawMatches[ligaKey]) {
+    state.calibrationRawMatches[ligaKey] = { displayName: liga, matches: [] };
+  }
+
+  // Avoid duplicate entries if the same bet gets re-settled (shouldn't normally happen, but safe)
+  const alreadyExists = state.calibrationRawMatches[ligaKey].matches.some(m =>
+    m._fromHistoryId === historyEntry.id
+  );
+  if (alreadyExists) return;
+
+  state.calibrationRawMatches[ligaKey].matches.push({
+    home, away, hg: homeGoals, ag: awayGoals, htHg, htAg, liga, daysAgo,
+    _fromHistoryId: historyEntry.id // tag so we can detect duplicates and so calibration UI can note these came from tracked bets
+  });
 }
 
 function exportHistorico() {
@@ -2315,6 +2386,46 @@ function showBackendStatus(message, type) {
   }
   statusDiv.className = `alert alert-${type}`;
   statusDiv.textContent = message;
+}
+
+async function checkQuotaStatus() {
+  const display = document.getElementById('quota-status-display');
+  if (!state.backendUrl) {
+    display.innerHTML = '<div class="alert alert-warning" style="margin-top:10px">Configura o URL do backend primeiro.</div>';
+    return;
+  }
+
+  display.innerHTML = '<div class="alert alert-info" style="margin-top:10px"><span class="loader"></span> A consultar quota...</div>';
+
+  try {
+    const res = await fetch(state.backendUrl + '/quota-status');
+    if (!res.ok) throw new Error('Resposta inválida do backend');
+    const data = await res.json();
+
+    const renderBar = (label, info) => {
+      const pct = Math.min(100, (info.used / info.limit) * 100);
+      const color = pct > 90 ? 'var(--accent-red)' : pct > 70 ? 'var(--accent-amber)' : 'var(--accent-green)';
+      return `
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+            <span class="text-secondary">${label}</span>
+            <span class="fw-600">${info.used} / ${info.limit}</span>
+          </div>
+          <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div>
+        </div>
+      `;
+    };
+
+    display.innerHTML = `
+      <div class="card" style="margin-top:10px;padding:14px">
+        <div class="text-xs text-dim mb-8">Uso diário (reinicia à meia-noite UTC)</div>
+        ${renderBar('NewsAPI', data.newsapi)}
+        ${renderBar('API-Football', data.apifootball)}
+      </div>
+    `;
+  } catch(e) {
+    display.innerHTML = `<div class="alert alert-danger" style="margin-top:10px">❌ Não foi possível obter o estado da quota: ${e.message}</div>`;
+  }
 }
 
 // Drag & drop
